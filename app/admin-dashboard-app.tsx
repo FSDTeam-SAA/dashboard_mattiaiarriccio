@@ -8,6 +8,14 @@ import {
   useMemo,
   useState,
 } from "react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 type AuthMode = "login" | "forgot" | "otp" | "reset";
 type Section = "dashboard" | "prompt" | "checklists" | "tips" | "settings";
@@ -178,6 +186,17 @@ const formatRelativeTime = (value: string) => {
 
 const classNames = (...values: Array<string | false | null | undefined>) =>
   values.filter(Boolean).join(" ");
+
+const getSectionIconName = (section: Section) =>
+  section === "dashboard"
+    ? "dashboard"
+    : section === "prompt"
+      ? "prompt"
+      : section === "checklists"
+        ? "checklists"
+        : section === "tips"
+          ? "tips"
+          : "settings";
 
 function AppIcon({
   name,
@@ -463,9 +482,9 @@ function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-8">
-      <div className="scrollbar-thin max-h-full w-full max-w-4xl overflow-y-auto rounded-[28px] border border-white/50 bg-[var(--panel)] shadow-[var(--shadow)]">
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[var(--border)] bg-[var(--panel)] px-6 py-5">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/45 px-4 py-4 sm:flex sm:items-center sm:justify-center sm:py-8">
+      <div className="scrollbar-thin mx-auto w-full max-w-4xl overflow-y-auto rounded-[24px] border border-white/50 bg-[var(--panel)] shadow-[var(--shadow)] sm:max-h-full sm:rounded-[28px]">
+        <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-[var(--border)] bg-[var(--panel)] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6 sm:py-5">
           <div>
             <h3 className="text-xl font-bold text-[#201a1b]">{title}</h3>
             {subtitle ? (
@@ -475,12 +494,12 @@ function Modal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
+            className="self-start rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
           >
             Close
           </button>
         </div>
-        <div className="px-6 py-6">{children}</div>
+        <div className="px-4 py-4 sm:px-6 sm:py-6">{children}</div>
       </div>
     </div>
   );
@@ -591,6 +610,7 @@ export default function AdminDashboardApp() {
   const [checklistSearch, setChecklistSearch] = useState("");
   const [tipSearch, setTipSearch] = useState("");
   const [showAllActivity, setShowAllActivity] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [checklistModalOpen, setChecklistModalOpen] = useState(false);
   const [safetyTipModalOpen, setSafetyTipModalOpen] = useState(false);
   const [checklistForm, setChecklistForm] = useState<ChecklistFormState>(
@@ -625,6 +645,7 @@ export default function AdminDashboardApp() {
   const handleLogout = (showToast = true) => {
     window.localStorage.removeItem("wesafe-admin-token");
     setToken(null);
+    setMobileNavOpen(false);
     setDashboard(null);
     setChecklists([]);
     setSafetyTips([]);
@@ -636,6 +657,16 @@ export default function AdminDashboardApp() {
     if (showToast) {
       setToast({ kind: "success", message: "Logged out successfully." });
     }
+  };
+
+  const handleSectionChange = (section: Section) => {
+    setActiveSection(section);
+    setMobileNavOpen(false);
+  };
+
+  const openLogoutDialog = () => {
+    setMobileNavOpen(false);
+    setConfirmDialog({ kind: "logout" });
   };
 
   const handleRequestError = (error: unknown) => {
@@ -1092,7 +1123,7 @@ export default function AdminDashboardApp() {
             value={loginForm.password}
             onChange={(value) => setLoginForm((current) => ({ ...current, password: value }))}
           />
-          <div className="flex items-center justify-between text-sm text-[var(--muted)]">
+          <div className="flex flex-col items-start gap-2 text-sm text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between">
             <span>Use the seeded admin account to start.</span>
             <button
               type="button"
@@ -1235,8 +1266,8 @@ export default function AdminDashboardApp() {
         </div>
 
         <section className="rounded-[14px] border border-[#f0e7e7] bg-[#fffafa] p-4 shadow-[0_10px_24px_rgba(22,18,18,0.04)] sm:p-5">
-          <div className="flex items-center justify-between gap-4">
-            <h3 className="text-[1.7rem] font-semibold tracking-[-0.03em] text-[#241d1f]">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <h3 className="text-[1.45rem] font-semibold tracking-[-0.03em] text-[#241d1f] sm:text-[1.7rem]">
               Recent Activity
             </h3>
             {activity.length > 5 ? (
@@ -1287,8 +1318,8 @@ export default function AdminDashboardApp() {
 
   const renderPromptSection = () => (
     <form onSubmit={savePrompt} className="space-y-6">
-      <div className="rounded-[28px] border border-[var(--border)] bg-white p-6 shadow-[0_18px_40px_rgba(26,18,18,0.06)]">
-        <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="rounded-[28px] border border-[var(--border)] bg-white p-4 shadow-[0_18px_40px_rgba(26,18,18,0.06)] sm:p-6">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
               Live AI configuration
@@ -1300,7 +1331,7 @@ export default function AdminDashboardApp() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-2xl bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--danger-deep)]"
+            className="w-full rounded-2xl bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--danger-deep)] sm:w-auto"
           >
             {loading ? "Saving..." : "Save changes"}
           </button>
@@ -1349,7 +1380,7 @@ export default function AdminDashboardApp() {
         <button
           type="button"
           onClick={() => openChecklistModal()}
-          className="inline-flex items-center gap-2 self-start rounded-[10px] bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(216,43,43,0.22)] transition hover:bg-[var(--danger-deep)]"
+          className="inline-flex w-full items-center justify-center gap-2 self-start rounded-[10px] bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(216,43,43,0.22)] transition hover:bg-[var(--danger-deep)] sm:w-auto"
         >
           <span className="text-xl leading-none">+</span>
           <span>New Checklist</span>
@@ -1360,30 +1391,32 @@ export default function AdminDashboardApp() {
           {filteredChecklists.map((item) => (
             <div
               key={item.id}
-              className="flex items-center gap-3 rounded-[10px] border border-[#ece4e4] bg-white px-4 py-4"
+              className="flex flex-col items-start gap-3 rounded-[10px] border border-[#ece4e4] bg-white px-4 py-4 sm:flex-row sm:items-center"
             >
-              <div className="shrink-0 text-[var(--danger)]">
-                <AppIcon name="chevron" className="h-4 w-4" />
+              <div className="flex w-full min-w-0 items-center gap-3">
+                <div className="shrink-0 text-[var(--danger)]">
+                  <AppIcon name="chevron" className="h-4 w-4" />
+                </div>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#f5dede] bg-[#fff5f5]">
+                  {item.iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.iconUrl}
+                      alt={item.title}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <AppIcon name="checklists" className="h-4 w-4 text-[var(--danger)]" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[1.02rem] font-semibold text-[#2b2526]">
+                    {item.title}
+                  </p>
+                  <p className="mt-1 text-sm text-[#6b6467]">{item.items.length} Items</p>
+                </div>
               </div>
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#f5dede] bg-[#fff5f5]">
-                {item.iconUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.iconUrl}
-                    alt={item.title}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <AppIcon name="checklists" className="h-4 w-4 text-[var(--danger)]" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[1.02rem] font-semibold text-[#2b2526]">
-                  {item.title}
-                </p>
-                <p className="mt-1 text-sm text-[#6b6467]">{item.items.length} Items</p>
-              </div>
-              <div className="flex items-center gap-3">
+              <div className="flex w-full items-center justify-end gap-3 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => openChecklistModal(item)}
@@ -1431,7 +1464,7 @@ export default function AdminDashboardApp() {
         <button
           type="button"
           onClick={() => openSafetyTipModal()}
-          className="inline-flex items-center gap-2 self-start rounded-[10px] bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(216,43,43,0.22)] transition hover:bg-[var(--danger-deep)]"
+          className="inline-flex w-full items-center justify-center gap-2 self-start rounded-[10px] bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(216,43,43,0.22)] transition hover:bg-[var(--danger-deep)] sm:w-auto"
         >
           <span className="text-xl leading-none">+</span>
           <span>New Safety Tip</span>
@@ -1442,7 +1475,7 @@ export default function AdminDashboardApp() {
           {filteredTips.map((item) => (
             <div
               key={item.id}
-              className="flex items-center gap-3 rounded-[10px] border border-[#ece4e4] bg-white px-4 py-4"
+              className="flex flex-col items-start gap-3 rounded-[10px] border border-[#ece4e4] bg-white px-4 py-4 sm:flex-row sm:items-center"
             >
               <div className="shrink-0 text-[var(--danger)]">
                 <AppIcon name="chevron" className="h-4 w-4" />
@@ -1511,11 +1544,11 @@ export default function AdminDashboardApp() {
 
     return (
       <form onSubmit={saveSettings} className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-[28px] border border-[var(--border)] bg-white p-6 shadow-[0_18px_40px_rgba(26,18,18,0.06)]">
+        <div className="rounded-[28px] border border-[var(--border)] bg-white p-5 shadow-[0_18px_40px_rgba(26,18,18,0.06)] sm:p-6">
           <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
             Profile
           </p>
-          <div className="mt-5 flex items-center gap-4">
+          <div className="mt-5 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <div className="grid h-20 w-20 place-items-center rounded-[26px] bg-[var(--danger-soft)] text-2xl font-bold text-[var(--danger)]">
               {adminProfile.fullName.slice(0, 2).toUpperCase()}
             </div>
@@ -1525,7 +1558,7 @@ export default function AdminDashboardApp() {
             </div>
           </div>
         </div>
-        <div className="space-y-5 rounded-[28px] border border-[var(--border)] bg-white p-6 shadow-[0_18px_40px_rgba(26,18,18,0.06)]">
+        <div className="space-y-5 rounded-[28px] border border-[var(--border)] bg-white p-5 shadow-[0_18px_40px_rgba(26,18,18,0.06)] sm:p-6">
           <div className="grid gap-5 md:grid-cols-2">
             <Field
               label="First name"
@@ -1593,7 +1626,7 @@ export default function AdminDashboardApp() {
                 />
               </label>
             </div>
-            <div className="mt-4 flex items-center gap-4">
+            <div className="mt-4 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
               <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-[#eadede] bg-white">
                 {adminProfile.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -1675,6 +1708,51 @@ export default function AdminDashboardApp() {
     }
   };
 
+  const sidebarContent = (
+    <div className="flex h-full flex-col bg-white">
+      <div className="border-b border-[#f1e9e9] px-5 py-4 sm:px-8 sm:py-5 lg:border-b-0">
+        <BrandMark />
+      </div>
+
+      <nav className="flex-1 space-y-1 px-4 py-4">
+        {navItems.map((item) => {
+          const active = item.id === activeSection;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => handleSectionChange(item.id)}
+              className={classNames(
+                "flex w-full items-center gap-3 rounded-[8px] px-3 py-3 text-left text-sm font-medium transition",
+                active
+                  ? "bg-[var(--danger)] text-white"
+                  : "text-[#2b2526] hover:bg-[#faf4f4]"
+              )}
+            >
+              <AppIcon
+                name={getSectionIconName(item.id)}
+                className="h-4 w-4 shrink-0"
+              />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="border-t border-[#f1e9e9] px-4 py-5">
+        <button
+          type="button"
+          onClick={openLogoutDialog}
+          className="flex items-center gap-2 text-sm font-medium text-[#2c2627] transition hover:text-[var(--danger)]"
+        >
+          <AppIcon name="logout" className="h-4 w-4" />
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  );
+
   if (booting) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_#67615d,_#4a4948_58%)] p-6 text-white">
@@ -1717,7 +1795,7 @@ export default function AdminDashboardApp() {
               ))}
             </div>
           </section>
-          <section className="flex flex-col justify-center bg-[var(--panel)] px-6 py-10 sm:px-10">
+          <section className="flex flex-col justify-center bg-[var(--panel)] px-5 py-8 sm:px-10 sm:py-10">
             <div className="mx-auto w-full max-w-md">
               <div className="mb-8">
                 <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--danger)]">
@@ -1747,7 +1825,7 @@ export default function AdminDashboardApp() {
         {toast ? (
           <div
             className={classNames(
-              "fixed bottom-6 right-6 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-lg",
+              "fixed bottom-4 left-4 right-4 rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-lg sm:bottom-6 sm:left-auto sm:right-6",
               toast.kind === "success" ? "bg-emerald-600" : "bg-[var(--danger)]"
             )}
           >
@@ -1760,85 +1838,83 @@ export default function AdminDashboardApp() {
 
   return (
     <main className="min-h-screen bg-[#fcf8f8] text-[#201a1b]">
-      <div className="min-h-screen overflow-hidden bg-white lg:flex">
-          <aside className="flex w-full flex-col border-b border-[#f1e9e9] bg-white lg:min-h-screen lg:w-[230px] lg:border-b-0 lg:border-r">
-            <div className="px-8 py-5">
-              <BrandMark />
-            </div>
-
-            <nav className="flex-1 space-y-1 px-4 py-3">
-              {navItems.map((item) => {
-                const active = item.id === activeSection;
-                const iconName =
-                  item.id === "dashboard"
-                    ? "dashboard"
-                    : item.id === "prompt"
-                      ? "prompt"
-                      : item.id === "checklists"
-                        ? "checklists"
-                        : item.id === "tips"
-                          ? "tips"
-                          : "settings";
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setActiveSection(item.id)}
-                    className={classNames(
-                      "flex w-full items-center gap-3 rounded-[4px] px-3 py-3 text-left text-sm font-medium transition",
-                      active
-                        ? "bg-[var(--danger)] text-white"
-                        : "text-[#2b2526] hover:bg-[#faf4f4]"
-                    )}
-                  >
-                    <AppIcon name={iconName} className="h-4 w-4 shrink-0" />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-
-            <div className="px-4 py-5">
-              <button
-                type="button"
-                onClick={() => setConfirmDialog({ kind: "logout" })}
-                className="flex items-center gap-2 text-sm font-medium text-[#2c2627] transition hover:text-[var(--danger)]"
-              >
-                <AppIcon name="logout" className="h-4 w-4" />
-                <span>Logout</span>
-              </button>
-            </div>
+      <div className="min-h-screen bg-white lg:flex">
+          <aside className="hidden min-h-screen w-[230px] border-r border-[#f1e9e9] bg-white lg:flex lg:flex-col">
+            {sidebarContent}
           </aside>
 
           <section className="flex-1 bg-[#fcf8f8]">
-            <header className="flex items-center justify-end border-b border-[#f1e9e9] bg-white px-5 py-4">
-              <button
-                type="button"
-                onClick={() => void refreshAll()}
-                disabled={refreshing}
-                className="mr-3 rounded-full border border-[#ece2e2] px-3 py-1.5 text-xs font-semibold text-[#6c6668] transition hover:border-[var(--danger)] hover:text-[var(--danger)] disabled:opacity-60"
-              >
-                {refreshing ? "Refreshing..." : "Refresh"}
-              </button>
-              <div className="flex items-center gap-2 rounded-full pl-1 pr-2">
-                <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-[#ebe2e2] bg-[#fff3f3] text-xs font-bold text-[#201a1b]">
-                  {adminProfile?.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={adminProfile.avatarUrl}
-                      alt={adminProfile.fullName}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    (adminProfile?.fullName || "AD").slice(0, 2).toUpperCase()
-                  )}
+            <header className="border-b border-[#f1e9e9] bg-white px-4 py-4 sm:px-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3 lg:hidden">
+                  <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+                    <SheetTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#ece2e2] text-[#2c2627] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                        aria-label="Open navigation menu"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 7h16" />
+                          <path d="M4 12h16" />
+                          <path d="M4 17h16" />
+                        </svg>
+                      </button>
+                    </SheetTrigger>
+                    <SheetContent
+                      side="left"
+                      className="w-[280px] max-w-[85vw] border-r border-[#f1e9e9] p-0"
+                    >
+                      <SheetHeader className="sr-only">
+                        <SheetTitle>Admin navigation</SheetTitle>
+                        <SheetDescription>
+                          Open the dashboard sections and account actions.
+                        </SheetDescription>
+                      </SheetHeader>
+                      {sidebarContent}
+                    </SheetContent>
+                  </Sheet>
+                  <BrandMark />
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-[#231d1f]">
-                    {adminProfile?.firstName || "Admin"}
-                  </p>
-                  <p className="text-xs text-[#6d6668]">@Admin</p>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void refreshAll()}
+                    disabled={refreshing}
+                    className="rounded-full border border-[#ece2e2] px-3 py-1.5 text-xs font-semibold text-[#6c6668] transition hover:border-[var(--danger)] hover:text-[var(--danger)] disabled:opacity-60"
+                  >
+                    {refreshing ? "Refreshing..." : "Refresh"}
+                  </button>
+                  <div className="flex items-center gap-2 rounded-full pl-1 pr-2">
+                    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-[#ebe2e2] bg-[#fff3f3] text-xs font-bold text-[#201a1b]">
+                      {adminProfile?.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={adminProfile.avatarUrl}
+                          alt={adminProfile.fullName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        (adminProfile?.fullName || "AD").slice(0, 2).toUpperCase()
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-[#231d1f]">
+                        {adminProfile?.firstName || "Admin"}
+                      </p>
+                      <p className="text-xs text-[#6d6668]">@Admin</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </header>
@@ -2319,7 +2395,7 @@ export default function AdminDashboardApp() {
               </div>
               <div className="mt-4 space-y-3">
                 {safetyTipForm.doList.map((item, index) => (
-                  <div key={`do-${index}`} className="flex gap-3">
+                  <div key={`do-${index}`} className="flex flex-col gap-3 sm:flex-row">
                     <input
                       value={item}
                       onChange={(event) =>
@@ -2376,7 +2452,7 @@ export default function AdminDashboardApp() {
               </div>
               <div className="mt-4 space-y-3">
                 {safetyTipForm.dontList.map((item, index) => (
-                  <div key={`dont-${index}`} className="flex gap-3">
+                  <div key={`dont-${index}`} className="flex flex-col gap-3 sm:flex-row">
                     <input
                       value={item}
                       onChange={(event) =>
@@ -2436,7 +2512,7 @@ export default function AdminDashboardApp() {
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {safetyTipForm.tags.map((tag, index) => (
-                <div key={`tag-${index}`} className="flex gap-3">
+                <div key={`tag-${index}`} className="flex flex-col gap-3 sm:flex-row">
                   <input
                     value={tag}
                     onChange={(event) =>
@@ -2547,7 +2623,7 @@ export default function AdminDashboardApp() {
       {toast ? (
         <div
           className={classNames(
-            "fixed bottom-6 right-6 z-[70] max-w-sm rounded-[22px] px-5 py-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(26,18,18,0.22)]",
+            "fixed bottom-4 left-4 right-4 z-[70] rounded-[22px] px-5 py-4 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(26,18,18,0.22)] sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-sm",
             toast.kind === "success" ? "bg-emerald-600" : "bg-[var(--danger)]"
           )}
         >
