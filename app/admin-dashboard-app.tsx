@@ -18,12 +18,19 @@ import {
 } from "@/components/ui/sheet";
 
 type AuthMode = "login" | "forgot" | "otp" | "reset";
-type Section = "dashboard" | "prompt" | "checklists" | "tips" | "settings";
+type Section =
+  | "dashboard"
+  | "prompt"
+  | "categories"
+  | "checklists"
+  | "tips"
+  | "settings";
 type ToastState = { kind: "success" | "error"; message: string } | null;
 
 type DashboardData = {
   summary: {
     totalUsers: number;
+    totalCategories: number;
     totalChecklists: number;
     totalSafetyTips: number;
     totalChats: number;
@@ -77,6 +84,19 @@ type ChecklistRecord = {
   updatedAt: string;
 };
 
+type CategoryRecord = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  sortOrder: number;
+  checklistsCount: number;
+  safetyTipsCount: number;
+  usageCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type SafetyTipRecord = {
   id: string;
   title: string;
@@ -107,6 +127,13 @@ type ChecklistFormState = {
   items: Array<{ id: string; text: string }>;
 };
 
+type CategoryFormState = {
+  id?: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+};
+
 type SafetyTipFormState = {
   id?: string;
   title: string;
@@ -132,14 +159,15 @@ const API_BASE_URL =
 const navItems: Array<{ id: Section; label: string; eyebrow: string }> = [
   { id: "dashboard", label: "Dashboard", eyebrow: "Overview" },
   { id: "prompt", label: "Chat bot prompts", eyebrow: "AI" },
+  { id: "categories", label: "Categories", eyebrow: "Library" },
   { id: "checklists", label: "Checklists", eyebrow: "Preparedness" },
   { id: "tips", label: "Safety tips", eyebrow: "Guides" },
   { id: "settings", label: "Settings", eyebrow: "Profile" },
 ];
 
-const emptyChecklistForm = (): ChecklistFormState => ({
+const emptyChecklistForm = (defaultCategory = ""): ChecklistFormState => ({
   title: "",
-  category: "General",
+  category: defaultCategory,
   description: "",
   status: "published",
   iconUrl: "",
@@ -147,9 +175,15 @@ const emptyChecklistForm = (): ChecklistFormState => ({
   items: [{ id: crypto.randomUUID(), text: "" }],
 });
 
-const emptySafetyTipForm = (): SafetyTipFormState => ({
+const emptyCategoryForm = (): CategoryFormState => ({
+  name: "",
+  description: "",
+  sortOrder: 0,
+});
+
+const emptySafetyTipForm = (defaultCategory = ""): SafetyTipFormState => ({
   title: "",
-  category: "General",
+  category: defaultCategory,
   summary: "",
   status: "published",
   language: "en",
@@ -192,6 +226,8 @@ const getSectionIconName = (section: Section) =>
     ? "dashboard"
     : section === "prompt"
       ? "prompt"
+      : section === "categories"
+        ? "categories"
       : section === "checklists"
         ? "checklists"
         : section === "tips"
@@ -205,6 +241,7 @@ function AppIcon({
   name:
     | "dashboard"
     | "prompt"
+    | "categories"
     | "checklists"
     | "tips"
     | "settings"
@@ -243,6 +280,14 @@ function AppIcon({
           <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4 4v-4H7.5A2.5 2.5 0 0 1 5 12.5z" />
           <path d="M8.5 8.5h7" />
           <path d="M8.5 11.5h4.5" />
+        </svg>
+      );
+    case "categories":
+      return (
+        <svg {...sharedProps}>
+          <path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Z" />
+          <path d="M4 12.5 12 17l8-4.5" />
+          <path d="M4 17.5 12 22l8-4.5" />
         </svg>
       );
     case "checklists":
@@ -602,17 +647,21 @@ export default function AdminDashboardApp() {
     systemInstruction: "",
     fallbackMessage: "",
   });
+  const [categories, setCategories] = useState<CategoryRecord[]>([]);
   const [checklists, setChecklists] = useState<ChecklistRecord[]>([]);
   const [safetyTips, setSafetyTips] = useState<SafetyTipRecord[]>([]);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
 
+  const [categorySearch, setCategorySearch] = useState("");
   const [checklistSearch, setChecklistSearch] = useState("");
   const [tipSearch, setTipSearch] = useState("");
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [checklistModalOpen, setChecklistModalOpen] = useState(false);
   const [safetyTipModalOpen, setSafetyTipModalOpen] = useState(false);
+  const [categoryForm, setCategoryForm] = useState<CategoryFormState>(emptyCategoryForm());
   const [checklistForm, setChecklistForm] = useState<ChecklistFormState>(
     emptyChecklistForm()
   );
@@ -620,7 +669,7 @@ export default function AdminDashboardApp() {
     emptySafetyTipForm()
   );
   const [confirmDialog, setConfirmDialog] = useState<{
-    kind: "logout" | "checklist" | "tip" | null;
+    kind: "logout" | "category" | "checklist" | "tip" | null;
     id?: string;
     label?: string;
   }>({ kind: null });
@@ -647,10 +696,14 @@ export default function AdminDashboardApp() {
     setToken(null);
     setMobileNavOpen(false);
     setDashboard(null);
+    setCategories([]);
     setChecklists([]);
     setSafetyTips([]);
     setActivity([]);
     setAdminProfile(null);
+    setCategoryModalOpen(false);
+    setChecklistModalOpen(false);
+    setSafetyTipModalOpen(false);
     setActiveSection("dashboard");
     setAuthMode("login");
     setConfirmDialog({ kind: null });
@@ -691,6 +744,7 @@ export default function AdminDashboardApp() {
       const [
         dashboardData,
         promptData,
+        categoryData,
         checklistData,
         safetyTipData,
         settingsData,
@@ -698,6 +752,7 @@ export default function AdminDashboardApp() {
       ] = await Promise.all([
         apiRequest<DashboardData>("/admin/dashboard", { token: currentToken }),
         apiRequest<PromptForm>("/admin/ai-prompt", { token: currentToken }),
+        apiRequest<CategoryRecord[]>("/admin/categories", { token: currentToken }),
         apiRequest<ChecklistRecord[]>("/admin/checklists", { token: currentToken }),
         apiRequest<SafetyTipRecord[]>("/admin/safety-tips", { token: currentToken }),
         apiRequest<AdminProfile>("/admin/settings", { token: currentToken }),
@@ -706,6 +761,7 @@ export default function AdminDashboardApp() {
 
       setDashboard(dashboardData);
       setPromptForm(promptData);
+      setCategories(categoryData);
       setChecklists(checklistData);
       setSafetyTips(safetyTipData);
       setAdminProfile(settingsData);
@@ -724,6 +780,19 @@ export default function AdminDashboardApp() {
 
     void refreshAll(token);
   }, [token]);
+
+  const defaultCategoryName = categories[0]?.name || "";
+  const hasManagedCategories = categories.length > 0;
+
+  const filteredCategories = useMemo(() => {
+    const query = categorySearch.trim().toLowerCase();
+    if (!query) {
+      return categories;
+    }
+    return categories.filter((item) =>
+      [item.name, item.description, item.slug].join(" ").toLowerCase().includes(query)
+    );
+  }, [categories, categorySearch]);
 
   const filteredChecklists = useMemo(() => {
     const query = checklistSearch.trim().toLowerCase();
@@ -844,6 +913,21 @@ export default function AdminDashboardApp() {
     }
   };
 
+  const openCategoryModal = (record?: CategoryRecord) => {
+    if (record) {
+      setCategoryForm({
+        id: record.id,
+        name: record.name,
+        description: record.description,
+        sortOrder: record.sortOrder,
+      });
+    } else {
+      setCategoryForm(emptyCategoryForm());
+    }
+
+    setCategoryModalOpen(true);
+  };
+
   const openChecklistModal = (record?: ChecklistRecord) => {
     if (record) {
       setChecklistForm({
@@ -857,7 +941,7 @@ export default function AdminDashboardApp() {
         items: record.items.map((item) => ({ id: item.id, text: item.text })),
       });
     } else {
-      setChecklistForm(emptyChecklistForm());
+      setChecklistForm(emptyChecklistForm(defaultCategoryName));
     }
 
     setChecklistModalOpen(true);
@@ -885,15 +969,58 @@ export default function AdminDashboardApp() {
         tags: record.tags.length > 0 ? record.tags : [""],
       });
     } else {
-      setSafetyTipForm(emptySafetyTipForm());
+      setSafetyTipForm(emptySafetyTipForm(defaultCategoryName));
     }
 
     setSafetyTipModalOpen(true);
   };
 
+  const saveCategory = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token) return;
+    setLoading(true);
+
+    try {
+      const body = {
+        name: categoryForm.name,
+        description: categoryForm.description,
+        sortOrder: Number(categoryForm.sortOrder),
+      };
+
+      if (categoryForm.id) {
+        await apiRequest(`/admin/categories/${categoryForm.id}`, {
+          token,
+          method: "PATCH",
+          body,
+        });
+      } else {
+        await apiRequest("/admin/categories", {
+          token,
+          method: "POST",
+          body,
+        });
+      }
+
+      setCategoryModalOpen(false);
+      setToast({
+        kind: "success",
+        message: categoryForm.id ? "Category updated." : "Category created.",
+      });
+      await refreshAll(token);
+    } catch (error) {
+      handleRequestError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const saveChecklist = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) return;
+    if (!checklistForm.category) {
+      setToast({ kind: "error", message: "Create a category first." });
+      return;
+    }
     setLoading(true);
 
     try {
@@ -943,6 +1070,10 @@ export default function AdminDashboardApp() {
   const saveSafetyTip = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) return;
+    if (!safetyTipForm.category) {
+      setToast({ kind: "error", message: "Create a category first." });
+      return;
+    }
     setLoading(true);
 
     try {
@@ -1003,6 +1134,14 @@ export default function AdminDashboardApp() {
       if (confirmDialog.kind === "logout") {
         handleLogout();
         return;
+      }
+
+      if (confirmDialog.kind === "category" && confirmDialog.id) {
+        await apiRequest(`/admin/categories/${confirmDialog.id}`, {
+          token,
+          method: "DELETE",
+        });
+        setToast({ kind: "success", message: "Category deleted." });
       }
 
       if (confirmDialog.kind === "checklist" && confirmDialog.id) {
@@ -1366,6 +1505,91 @@ export default function AdminDashboardApp() {
     </form>
   );
 
+  const renderCategoriesSection = () => (
+    <section className="space-y-5">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-[2rem] font-bold tracking-[-0.03em] text-[#221c1d]">
+            Categories
+          </h2>
+          <p className="mt-1 text-sm text-[#6d6668]">
+            Create the shared category library used by checklists and safety tips
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => openCategoryModal()}
+          className="inline-flex w-full items-center justify-center gap-2 self-start rounded-[10px] bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(216,43,43,0.22)] transition hover:bg-[var(--danger-deep)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        >
+          <span className="text-xl leading-none">+</span>
+          <span>New Category</span>
+        </button>
+      </div>
+      <div className="rounded-[14px] border border-[#eee4e4] bg-[#fffafa] p-3 shadow-[0_10px_24px_rgba(22,18,18,0.04)] sm:p-4">
+        <div className="mb-4">
+          <Field
+            label="Search categories"
+            value={categorySearch}
+            onChange={setCategorySearch}
+            placeholder="Find by name, description, or slug"
+          />
+        </div>
+        <div className="space-y-2">
+          {filteredCategories.map((item) => (
+            <div
+              key={item.id}
+              className="flex flex-col gap-3 rounded-[10px] border border-[#ece4e4] bg-white px-4 py-4 md:flex-row md:items-center md:justify-between"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-[1.02rem] font-semibold text-[#2b2526]">
+                    {item.name}
+                  </p>
+                  <span className="rounded-full bg-[#fff3f3] px-2.5 py-1 text-xs font-semibold text-[var(--danger)]">
+                    #{item.sortOrder}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm text-[#6b6467]">{item.description || item.slug}</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium text-[#6d6668]">
+                  <span>{item.checklistsCount} checklists</span>
+                  <span>{item.safetyTipsCount} safety tips</span>
+                  <span>{item.usageCount} total uses</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => openCategoryModal(item)}
+                  className="text-[#1771d6] transition hover:text-[#0f5eb6]"
+                >
+                  <AppIcon name="edit" className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setConfirmDialog({
+                      kind: "category",
+                      id: item.id,
+                      label: item.name,
+                    })
+                  }
+                  className="text-[#ef4444] transition hover:text-[#d72d2d]"
+                >
+                  <AppIcon name="delete" className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {filteredCategories.length === 0 ? (
+            <div className="rounded-[10px] border border-dashed border-[#eadede] bg-white px-4 py-10 text-center text-sm text-[#7a7275]">
+              No category matches the current filter.
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+
   const renderChecklistsSection = () => (
     <section className="space-y-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -1380,12 +1604,18 @@ export default function AdminDashboardApp() {
         <button
           type="button"
           onClick={() => openChecklistModal()}
-          className="inline-flex w-full items-center justify-center gap-2 self-start rounded-[10px] bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(216,43,43,0.22)] transition hover:bg-[var(--danger-deep)] sm:w-auto"
+          disabled={!hasManagedCategories}
+          className="inline-flex w-full items-center justify-center gap-2 self-start rounded-[10px] bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(216,43,43,0.22)] transition hover:bg-[var(--danger-deep)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
           <span className="text-xl leading-none">+</span>
           <span>New Checklist</span>
         </button>
       </div>
+      {!hasManagedCategories ? (
+        <div className="rounded-[10px] border border-dashed border-[#eadede] bg-white px-4 py-4 text-sm text-[#7a7275]">
+          Create at least one category before creating a checklist.
+        </div>
+      ) : null}
       <div className="rounded-[14px] border border-[#eee4e4] bg-[#fffafa] p-3 shadow-[0_10px_24px_rgba(22,18,18,0.04)] sm:p-4">
         <div className="space-y-2">
           {filteredChecklists.map((item) => (
@@ -1464,12 +1694,18 @@ export default function AdminDashboardApp() {
         <button
           type="button"
           onClick={() => openSafetyTipModal()}
+          disabled={!hasManagedCategories}
           className="inline-flex w-full items-center justify-center gap-2 self-start rounded-[10px] bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(216,43,43,0.22)] transition hover:bg-[var(--danger-deep)] sm:w-auto"
         >
           <span className="text-xl leading-none">+</span>
           <span>New Safety Tip</span>
         </button>
       </div>
+      {!hasManagedCategories ? (
+        <div className="rounded-[10px] border border-dashed border-[#eadede] bg-white px-4 py-4 text-sm text-[#7a7275]">
+          Create at least one category before publishing a safety tip.
+        </div>
+      ) : null}
       <div className="rounded-[14px] border border-[#eee4e4] bg-[#fffafa] p-3 shadow-[0_10px_24px_rgba(22,18,18,0.04)] sm:p-4">
         <div className="space-y-2">
           {filteredTips.map((item) => (
@@ -1674,6 +1910,11 @@ export default function AdminDashboardApp() {
       title: "Chat bot prompts",
       description: "Update the live assistant prompt and sync changes to the AI service.",
     },
+    categories: {
+      eyebrow: "Categories",
+      title: "Categories",
+      description: "Manage the shared category library used by dashboard content.",
+    },
     checklists: {
       eyebrow: "Checklists",
       title: "Checklists",
@@ -1697,6 +1938,8 @@ export default function AdminDashboardApp() {
     switch (activeSection) {
       case "prompt":
         return renderPromptSection();
+      case "categories":
+        return renderCategoriesSection();
       case "checklists":
         return renderChecklistsSection();
       case "tips":
@@ -1930,6 +2173,66 @@ export default function AdminDashboardApp() {
         </div>
 
       <Modal
+        open={categoryModalOpen}
+        title={categoryForm.id ? "Edit category" : "Create category"}
+        subtitle="Create the shared category names the dashboard uses for guides and checklists."
+        onClose={() => setCategoryModalOpen(false)}
+      >
+        <form onSubmit={saveCategory} className="space-y-6">
+          <div className="grid gap-5 md:grid-cols-2">
+            <Field
+              label="Category name"
+              value={categoryForm.name}
+              onChange={(value) =>
+                setCategoryForm((current) => ({ ...current, name: value }))
+              }
+              placeholder="Flood"
+            />
+            <Field
+              label="Sort order"
+              type="number"
+              value={categoryForm.sortOrder}
+              onChange={(value) =>
+                setCategoryForm((current) => ({
+                  ...current,
+                  sortOrder: Number(value || 0),
+                }))
+              }
+              placeholder="1"
+            />
+          </div>
+          <TextAreaField
+            label="Description"
+            value={categoryForm.description}
+            onChange={(value) =>
+              setCategoryForm((current) => ({ ...current, description: value }))
+            }
+            rows={4}
+          />
+          <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setCategoryModalOpen(false)}
+              className="rounded-2xl border border-[var(--border)] px-5 py-3 text-sm font-semibold text-[var(--muted)]"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-2xl bg-[var(--danger)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--danger-deep)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading
+                ? "Saving..."
+                : categoryForm.id
+                  ? "Save Category"
+                  : "Create Category"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
         open={checklistModalOpen}
         title={checklistForm.id ? "Edit checklist" : "Create checklist"}
         subtitle="Manage checklist metadata, cover assets, and ordered steps for the mobile app."
@@ -1945,14 +2248,25 @@ export default function AdminDashboardApp() {
               }
               placeholder="Earthquake emergency"
             />
-            <Field
-              label="Category"
-              value={checklistForm.category}
-              onChange={(value) =>
-                setChecklistForm((current) => ({ ...current, category: value }))
-              }
-              placeholder="Emergency"
-            />
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-semibold text-[#33292b]">Category</span>
+              <select
+                value={checklistForm.category}
+                onChange={(event) =>
+                  setChecklistForm((current) => ({
+                    ...current,
+                    category: event.target.value,
+                  }))
+                }
+                className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
+              >
+                {categories.map((category) => (
+                  <option key={category.id} value={category.name}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="grid gap-5 md:grid-cols-[0.6fr_1.4fr]">
@@ -2150,14 +2464,25 @@ export default function AdminDashboardApp() {
               }
               placeholder="Staying safe during floods"
             />
-            <Field
-              label="Category"
-              value={safetyTipForm.category}
-              onChange={(value) =>
-                setSafetyTipForm((current) => ({ ...current, category: value }))
-              }
-              placeholder="Flood"
-            />
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-semibold text-[#33292b]">Category</span>
+              <select
+                value={safetyTipForm.category}
+                onChange={(event) =>
+                  setSafetyTipForm((current) => ({
+                    ...current,
+                    category: event.target.value,
+                  }))
+                }
+                className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
+              >
+                {categories.map((category) => (
+                  <option key={category.id} value={category.name}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex flex-col gap-2">
               <span className="text-sm font-semibold text-[#33292b]">Status</span>
               <select
@@ -2574,6 +2899,8 @@ export default function AdminDashboardApp() {
         title={
           confirmDialog.kind === "logout"
             ? "Logout"
+            : confirmDialog.kind === "category"
+              ? "Delete category"
             : confirmDialog.kind === "checklist"
               ? "Delete checklist"
               : "Delete safety tip"
@@ -2581,6 +2908,8 @@ export default function AdminDashboardApp() {
         subtitle={
           confirmDialog.kind === "logout"
             ? "End the current admin session on this browser."
+            : confirmDialog.kind === "category"
+              ? `This action will remove ${confirmDialog.label || "this category"} if it is no longer used by checklist or safety tip content.`
             : `This action will permanently remove ${confirmDialog.label || "this item"} from the MongoDB-backed admin library.`
         }
         onClose={() => setConfirmDialog({ kind: null })}
@@ -2589,6 +2918,8 @@ export default function AdminDashboardApp() {
           <div className="rounded-[24px] border border-[var(--border)] bg-[var(--panel-muted)] px-5 py-4 text-sm leading-7 text-[var(--muted)]">
             {confirmDialog.kind === "logout"
               ? "You can sign back in at any time with the admin credentials."
+              : confirmDialog.kind === "category"
+                ? "Categories can only be deleted after related checklists and safety tips are reassigned."
               : "The mobile app will stop receiving this content after deletion. This cannot be undone from the dashboard."}
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
