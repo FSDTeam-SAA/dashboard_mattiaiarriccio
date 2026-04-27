@@ -78,9 +78,10 @@ type ChecklistRecord = {
   category: string;
   description: string;
   iconUrl: string;
+  icon: string;
   coverImageUrl: string;
   status: string;
-  items: Array<{ id: string; text: string; order: number }>;
+  items: Array<{ id: string; text: string; order: number; icon: string }>;
   updatedAt: string;
 };
 
@@ -123,8 +124,9 @@ type ChecklistFormState = {
   description: string;
   status: string;
   iconUrl: string;
+  icon: string;
   coverImageUrl: string;
-  items: Array<{ id: string; text: string }>;
+  items: Array<{ id: string; text: string; icon: string }>;
 };
 
 type CategoryFormState = {
@@ -171,9 +173,23 @@ const emptyChecklistForm = (defaultCategory = ""): ChecklistFormState => ({
   description: "",
   status: "published",
   iconUrl: "",
+  icon: "",
   coverImageUrl: "",
-  items: [{ id: crypto.randomUUID(), text: "" }],
+  items: [{ id: crypto.randomUUID(), text: "", icon: "" }],
 });
+
+const ALLOWED_IMAGE_MIME_PREFIX = "image/";
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+const validateImageFile = (file: File): string | null => {
+  if (!file.type.startsWith(ALLOWED_IMAGE_MIME_PREFIX)) {
+    return "Only image files are allowed.";
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return "Image must be smaller than 5 MB.";
+  }
+  return null;
+};
 
 const emptyCategoryForm = (): CategoryFormState => ({
   name: "",
@@ -937,8 +953,13 @@ export default function AdminDashboardApp() {
         description: record.description,
         status: record.status,
         iconUrl: record.iconUrl,
+        icon: record.icon || "",
         coverImageUrl: record.coverImageUrl,
-        items: record.items.map((item) => ({ id: item.id, text: item.text })),
+        items: record.items.map((item) => ({
+          id: item.id,
+          text: item.text,
+          icon: item.icon || "",
+        })),
       });
     } else {
       setChecklistForm(emptyChecklistForm(defaultCategoryName));
@@ -1024,21 +1045,30 @@ export default function AdminDashboardApp() {
     setLoading(true);
 
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         title: checklistForm.title,
         category: checklistForm.category,
         description: checklistForm.description,
         status: checklistForm.status,
         iconUrl: checklistForm.iconUrl,
+        iconEmoji: checklistForm.icon,
         coverImageUrl: checklistForm.coverImageUrl,
         items: checklistForm.items
           .map((item, index) => ({
             id: item.id,
             text: item.text,
             order: index + 1,
+            icon: item.icon || "",
           }))
-          .filter((item) => item.text.trim()),
+          .filter((item) => (item.text as string).trim()),
       };
+
+      if (checklistForm.id && !checklistForm.iconUrl) {
+        body.removeIconUrl = true;
+      }
+      if (checklistForm.id && !checklistForm.coverImageUrl) {
+        body.removeCoverImageUrl = true;
+      }
 
       if (checklistForm.id) {
         await apiRequest(`/admin/checklists/${checklistForm.id}`, {
@@ -1077,7 +1107,7 @@ export default function AdminDashboardApp() {
     setLoading(true);
 
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         title: safetyTipForm.title,
         category: safetyTipForm.category,
         summary: safetyTipForm.summary,
@@ -1094,6 +1124,13 @@ export default function AdminDashboardApp() {
         dontList: safetyTipForm.dontList.filter((item) => item.trim()),
         tags: safetyTipForm.tags.filter((item) => item.trim()),
       };
+
+      if (safetyTipForm.id && !safetyTipForm.coverImageUrl) {
+        body.removeCoverImageUrl = true;
+      }
+      if (safetyTipForm.id && !safetyTipForm.thumbnailUrl) {
+        body.removeThumbnailUrl = true;
+      }
 
       if (safetyTipForm.id) {
         await apiRequest(`/admin/safety-tips/${safetyTipForm.id}`, {
@@ -1196,15 +1233,21 @@ export default function AdminDashboardApp() {
     setLoading(true);
 
     try {
+      const settingsBody: Record<string, unknown> = {
+        firstName: adminProfile.firstName,
+        lastName: adminProfile.lastName,
+        phoneNumber: adminProfile.phoneNumber,
+        avatarUrl: adminProfile.avatarUrl,
+      };
+
+      if (!adminProfile.avatarUrl) {
+        settingsBody.removeAvatarUrl = true;
+      }
+
       const data = await apiRequest<AdminProfile>("/admin/settings", {
         token,
         method: "PATCH",
-        body: {
-          firstName: adminProfile.firstName,
-          lastName: adminProfile.lastName,
-          phoneNumber: adminProfile.phoneNumber,
-          avatarUrl: adminProfile.avatarUrl,
-        },
+        body: settingsBody,
       });
       setAdminProfile(data);
       setToast({ kind: "success", message: "Settings updated." });
@@ -1223,6 +1266,13 @@ export default function AdminDashboardApp() {
   ) => {
     const file = event.target.files?.[0];
     if (!file || !token) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      event.target.value = "";
+      setToast({ kind: "error", message: validationError });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -1245,6 +1295,22 @@ export default function AdminDashboardApp() {
       event.target.value = "";
       setLoading(false);
     }
+  };
+
+  const handleMediaRemove = (
+    scope: "checklist" | "tip" | "profile",
+    field: "iconUrl" | "coverImageUrl" | "thumbnailUrl" | "avatarUrl"
+  ) => {
+    if (scope === "checklist") {
+      setChecklistForm((current) => ({ ...current, [field]: "" }));
+    } else if (scope === "profile") {
+      setAdminProfile((current) =>
+        current ? { ...current, avatarUrl: "" } : current
+      );
+    } else {
+      setSafetyTipForm((current) => ({ ...current, [field]: "" }));
+    }
+    setToast({ kind: "success", message: "Image removed. Save changes to apply." });
   };
 
   const renderAuthPanel = () => {
@@ -1627,7 +1693,7 @@ export default function AdminDashboardApp() {
                 <div className="shrink-0 text-[var(--danger)]">
                   <AppIcon name="chevron" className="h-4 w-4" />
                 </div>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#f5dede] bg-[#fff5f5]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#f5dede] bg-[#fff5f5] text-lg">
                   {item.iconUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -1635,6 +1701,8 @@ export default function AdminDashboardApp() {
                       alt={item.title}
                       className="h-full w-full object-cover"
                     />
+                  ) : item.icon ? (
+                    <span aria-hidden="true">{item.icon}</span>
                   ) : (
                     <AppIcon name="checklists" className="h-4 w-4 text-[var(--danger)]" />
                   )}
@@ -1850,17 +1918,28 @@ export default function AdminDashboardApp() {
                   Upload the avatar directly using form-data. Manual URL entry is disabled.
                 </p>
               </div>
-              <label className="cursor-pointer rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]">
-                {adminProfile.avatarUrl ? "Replace avatar" : "Upload avatar"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(event) =>
-                    void handleMediaUpload(event, "admin-profile", "profile", "avatarUrl")
-                  }
-                />
-              </label>
+              <div className="flex flex-wrap gap-3">
+                <label className="cursor-pointer rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]">
+                  {adminProfile.avatarUrl ? "Replace avatar" : "Upload avatar"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) =>
+                      void handleMediaUpload(event, "admin-profile", "profile", "avatarUrl")
+                    }
+                  />
+                </label>
+                {adminProfile.avatarUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => handleMediaRemove("profile", "avatarUrl")}
+                    className="rounded-full border border-[var(--danger-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--danger)]"
+                  >
+                    Remove avatar
+                  </button>
+                ) : null}
+              </div>
             </div>
             <div className="mt-4 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
               <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-[#eadede] bg-white">
@@ -2290,7 +2369,8 @@ export default function AdminDashboardApp() {
             <div className="rounded-[24px] border border-[var(--border)] bg-[var(--panel-muted)] p-4">
               <p className="text-sm font-semibold text-[#201a1b]">Upload checklist media</p>
               <p className="mt-1 text-xs leading-6 text-[var(--muted)]">
-                Upload icon and cover assets directly using form-data. Manual URL entry is disabled.
+                PNG/JPG up to 5 MB. If upload is unavailable, set an emoji fallback below — the app
+                renders the emoji whenever the image is missing.
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
                 <label className="cursor-pointer rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]">
@@ -2304,6 +2384,15 @@ export default function AdminDashboardApp() {
                     }
                   />
                 </label>
+                {checklistForm.iconUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => handleMediaRemove("checklist", "iconUrl")}
+                    className="rounded-full border border-[var(--danger-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--danger)]"
+                  >
+                    Remove icon
+                  </button>
+                ) : null}
                 <label className="cursor-pointer rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]">
                   {checklistForm.coverImageUrl ? "Replace cover" : "Upload cover"}
                   <input
@@ -2320,6 +2409,25 @@ export default function AdminDashboardApp() {
                     }
                   />
                 </label>
+                {checklistForm.coverImageUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => handleMediaRemove("checklist", "coverImageUrl")}
+                    className="rounded-full border border-[var(--danger-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--danger)]"
+                  >
+                    Remove cover
+                  </button>
+                ) : null}
+              </div>
+              <div className="mt-4">
+                <Field
+                  label="Icon emoji fallback"
+                  value={checklistForm.icon}
+                  onChange={(value) =>
+                    setChecklistForm((current) => ({ ...current, icon: value }))
+                  }
+                  placeholder="e.g. 🔥"
+                />
               </div>
             </div>
           </div>
@@ -2373,7 +2481,10 @@ export default function AdminDashboardApp() {
                 onClick={() =>
                   setChecklistForm((current) => ({
                     ...current,
-                    items: [...current.items, { id: crypto.randomUUID(), text: "" }],
+                    items: [
+                      ...current.items,
+                      { id: crypto.randomUUID(), text: "", icon: "" },
+                    ],
                   }))
                 }
                 className="rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
@@ -2390,6 +2501,22 @@ export default function AdminDashboardApp() {
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[var(--danger-soft)] text-sm font-bold text-[var(--danger)]">
                     {index + 1}
                   </div>
+                  <input
+                    value={item.icon}
+                    onChange={(event) =>
+                      setChecklistForm((current) => ({
+                        ...current,
+                        items: current.items.map((currentItem) =>
+                          currentItem.id === item.id
+                            ? { ...currentItem, icon: event.target.value }
+                            : currentItem
+                        ),
+                      }))
+                    }
+                    placeholder="🛟"
+                    aria-label="Icon emoji fallback"
+                    className="w-full rounded-2xl border border-[var(--border)] bg-white px-3 py-3 text-center text-base outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)] md:w-16"
+                  />
                   <input
                     value={item.text}
                     onChange={(event) =>
@@ -2570,6 +2697,15 @@ export default function AdminDashboardApp() {
                     }
                   />
                 </label>
+                {safetyTipForm.coverImageUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => handleMediaRemove("tip", "coverImageUrl")}
+                    className="rounded-full border border-[var(--danger-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--danger)]"
+                  >
+                    Remove cover
+                  </button>
+                ) : null}
                 <label className="cursor-pointer rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]">
                   {safetyTipForm.thumbnailUrl ? "Replace thumbnail" : "Upload thumbnail"}
                   <input
@@ -2581,6 +2717,15 @@ export default function AdminDashboardApp() {
                     }
                   />
                 </label>
+                {safetyTipForm.thumbnailUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => handleMediaRemove("tip", "thumbnailUrl")}
+                    className="rounded-full border border-[var(--danger-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--danger)]"
+                  >
+                    Remove thumbnail
+                  </button>
+                ) : null}
               </div>
             </div>
             {(safetyTipForm.coverImageUrl || safetyTipForm.thumbnailUrl) && (
