@@ -742,6 +742,11 @@ export default function AdminDashboardApp() {
     const typedError = error as ApiErrorShape;
     if (typedError?.status === 401) {
       handleLogout(false);
+      setToast({
+        kind: "error",
+        message: "Session expired. Please log in again.",
+      });
+      return;
     }
     setToast({
       kind: "error",
