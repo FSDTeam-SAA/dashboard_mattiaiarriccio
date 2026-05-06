@@ -37,7 +37,7 @@ type DashboardData = {
     publishedSafetyTips: number;
   };
   recentActivity: ActivityItem[];
-  aiPrompt: PromptForm | null;
+  aiPrompt: PromptFormBundle | null;
   templatesPreview: Array<{
     id: string;
     title: string;
@@ -47,10 +47,18 @@ type DashboardData = {
   }>;
 };
 
+type PromptLanguage = "en" | "it";
+
 type PromptForm = {
+  language: PromptLanguage;
   welcomeMessage: string;
   systemInstruction: string;
   fallbackMessage: string;
+};
+
+type PromptFormBundle = {
+  en: PromptForm;
+  it: PromptForm;
 };
 
 type ActivityItem = {
@@ -76,7 +84,9 @@ type ChecklistRecord = {
   id: string;
   title: string;
   category: string;
+  categorySlug: string;
   description: string;
+  language: string;
   iconUrl: string;
   icon: string;
   coverImageUrl: string;
@@ -85,11 +95,15 @@ type ChecklistRecord = {
   updatedAt: string;
 };
 
+type LocalizedField = { en: string; it: string };
+
 type CategoryRecord = {
   id: string;
-  name: string;
   slug: string;
+  name: string;
   description: string;
+  names: LocalizedField;
+  descriptions: LocalizedField;
   sortOrder: number;
   checklistsCount: number;
   safetyTipsCount: number;
@@ -103,6 +117,7 @@ type SafetyTipRecord = {
   title: string;
   slug: string;
   category: string;
+  categorySlug: string;
   summary: string;
   status: string;
   language: string;
@@ -120,8 +135,9 @@ type SafetyTipRecord = {
 type ChecklistFormState = {
   id?: string;
   title: string;
-  category: string;
+  categorySlug: string;
   description: string;
+  language: string;
   status: string;
   iconUrl: string;
   icon: string;
@@ -131,15 +147,16 @@ type ChecklistFormState = {
 
 type CategoryFormState = {
   id?: string;
-  name: string;
-  description: string;
+  slug: string;
+  names: LocalizedField;
+  descriptions: LocalizedField;
   sortOrder: number;
 };
 
 type SafetyTipFormState = {
   id?: string;
   title: string;
-  category: string;
+  categorySlug: string;
   summary: string;
   status: string;
   language: string;
@@ -167,10 +184,19 @@ const navItems: Array<{ id: Section; label: string; eyebrow: string }> = [
   { id: "settings", label: "Settings", eyebrow: "Profile" },
 ];
 
-const emptyChecklistForm = (defaultCategory = ""): ChecklistFormState => ({
+const languageOptions = [
+  { value: "en", label: "English" },
+  { value: "it", label: "Italian" },
+];
+
+const languageLabel = (value: string) =>
+  languageOptions.find((option) => option.value === value)?.label || "English";
+
+const emptyChecklistForm = (defaultCategorySlug = ""): ChecklistFormState => ({
   title: "",
-  category: defaultCategory,
+  categorySlug: defaultCategorySlug,
   description: "",
+  language: "en",
   status: "published",
   iconUrl: "",
   icon: "",
@@ -192,14 +218,15 @@ const validateImageFile = (file: File): string | null => {
 };
 
 const emptyCategoryForm = (): CategoryFormState => ({
-  name: "",
-  description: "",
+  slug: "",
+  names: { en: "", it: "" },
+  descriptions: { en: "", it: "" },
   sortOrder: 0,
 });
 
-const emptySafetyTipForm = (defaultCategory = ""): SafetyTipFormState => ({
+const emptySafetyTipForm = (defaultCategorySlug = ""): SafetyTipFormState => ({
   title: "",
-  category: defaultCategory,
+  categorySlug: defaultCategorySlug,
   summary: "",
   status: "published",
   language: "en",
@@ -211,6 +238,18 @@ const emptySafetyTipForm = (defaultCategory = ""): SafetyTipFormState => ({
   doList: [""],
   dontList: [""],
   tags: [""],
+});
+
+const emptyPromptForm = (language: PromptLanguage): PromptForm => ({
+  language,
+  welcomeMessage: "",
+  systemInstruction: "",
+  fallbackMessage: "",
+});
+
+const emptyPromptBundle = (): PromptFormBundle => ({
+  en: emptyPromptForm("en"),
+  it: emptyPromptForm("it"),
 });
 
 const formatDate = (value: string) =>
@@ -658,11 +697,10 @@ export default function AdminDashboardApp() {
   });
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [promptForm, setPromptForm] = useState<PromptForm>({
-    welcomeMessage: "",
-    systemInstruction: "",
-    fallbackMessage: "",
-  });
+  const [promptForms, setPromptForms] = useState<PromptFormBundle>(
+    emptyPromptBundle()
+  );
+  const [promptLanguage, setPromptLanguage] = useState<PromptLanguage>("en");
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
   const [checklists, setChecklists] = useState<ChecklistRecord[]>([]);
   const [safetyTips, setSafetyTips] = useState<SafetyTipRecord[]>([]);
@@ -772,7 +810,7 @@ export default function AdminDashboardApp() {
         activityData,
       ] = await Promise.all([
         apiRequest<DashboardData>("/admin/dashboard", { token: currentToken }),
-        apiRequest<PromptForm>("/admin/ai-prompt", { token: currentToken }),
+        apiRequest<PromptFormBundle>("/admin/ai-prompt", { token: currentToken }),
         apiRequest<CategoryRecord[]>("/admin/categories", { token: currentToken }),
         apiRequest<ChecklistRecord[]>("/admin/checklists", { token: currentToken }),
         apiRequest<SafetyTipRecord[]>("/admin/safety-tips", { token: currentToken }),
@@ -781,7 +819,10 @@ export default function AdminDashboardApp() {
       ]);
 
       setDashboard(dashboardData);
-      setPromptForm(promptData);
+      setPromptForms({
+        en: { ...promptData.en, language: "en" },
+        it: { ...promptData.it, language: "it" },
+      });
       setCategories(categoryData);
       setChecklists(checklistData);
       setSafetyTips(safetyTipData);
@@ -802,7 +843,7 @@ export default function AdminDashboardApp() {
     void refreshAll(token);
   }, [token]);
 
-  const defaultCategoryName = categories[0]?.name || "";
+  const defaultCategorySlug = categories[0]?.slug || "";
   const hasManagedCategories = categories.length > 0;
 
   const filteredCategories = useMemo(() => {
@@ -811,7 +852,16 @@ export default function AdminDashboardApp() {
       return categories;
     }
     return categories.filter((item) =>
-      [item.name, item.description, item.slug].join(" ").toLowerCase().includes(query)
+      [
+        item.names?.en || "",
+        item.names?.it || "",
+        item.descriptions?.en || "",
+        item.descriptions?.it || "",
+        item.slug,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
     );
   }, [categories, categorySearch]);
 
@@ -821,7 +871,10 @@ export default function AdminDashboardApp() {
       return checklists;
     }
     return checklists.filter((item) =>
-      [item.title, item.category, item.description].join(" ").toLowerCase().includes(query)
+      [item.title, item.category, item.description, languageLabel(item.language)]
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
     );
   }, [checklists, checklistSearch]);
 
@@ -831,7 +884,10 @@ export default function AdminDashboardApp() {
       return safetyTips;
     }
     return safetyTips.filter((item) =>
-      [item.title, item.category, item.summary].join(" ").toLowerCase().includes(query)
+      [item.title, item.category, item.summary, languageLabel(item.language)]
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
     );
   }, [safetyTips, tipSearch]);
 
@@ -938,8 +994,15 @@ export default function AdminDashboardApp() {
     if (record) {
       setCategoryForm({
         id: record.id,
-        name: record.name,
-        description: record.description,
+        slug: record.slug,
+        names: {
+          en: record.names?.en || "",
+          it: record.names?.it || "",
+        },
+        descriptions: {
+          en: record.descriptions?.en || "",
+          it: record.descriptions?.it || "",
+        },
         sortOrder: record.sortOrder,
       });
     } else {
@@ -954,8 +1017,9 @@ export default function AdminDashboardApp() {
       setChecklistForm({
         id: record.id,
         title: record.title,
-        category: record.category,
+        categorySlug: record.categorySlug || record.category || defaultCategorySlug,
         description: record.description,
+        language: record.language || "en",
         status: record.status,
         iconUrl: record.iconUrl,
         icon: record.icon || "",
@@ -967,7 +1031,7 @@ export default function AdminDashboardApp() {
         })),
       });
     } else {
-      setChecklistForm(emptyChecklistForm(defaultCategoryName));
+      setChecklistForm(emptyChecklistForm(defaultCategorySlug));
     }
 
     setChecklistModalOpen(true);
@@ -978,10 +1042,10 @@ export default function AdminDashboardApp() {
       setSafetyTipForm({
         id: record.id,
         title: record.title,
-        category: record.category,
+        categorySlug: record.categorySlug || record.category || defaultCategorySlug,
         summary: record.summary,
         status: record.status,
-        language: record.language,
+        language: record.language || "en",
         featured: record.featured,
         estimatedReadMinutes: record.estimatedReadMinutes,
         coverImageUrl: record.coverImageUrl,
@@ -995,7 +1059,7 @@ export default function AdminDashboardApp() {
         tags: record.tags.length > 0 ? record.tags : [""],
       });
     } else {
-      setSafetyTipForm(emptySafetyTipForm(defaultCategoryName));
+      setSafetyTipForm(emptySafetyTipForm(defaultCategorySlug));
     }
 
     setSafetyTipModalOpen(true);
@@ -1004,14 +1068,30 @@ export default function AdminDashboardApp() {
   const saveCategory = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) return;
+
+    if (!categoryForm.names.en.trim()) {
+      setToast({ kind: "error", message: "English name is required." });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const body = {
-        name: categoryForm.name,
-        description: categoryForm.description,
+      const body: Record<string, unknown> = {
+        names: {
+          en: categoryForm.names.en.trim(),
+          it: categoryForm.names.it.trim(),
+        },
+        descriptions: {
+          en: categoryForm.descriptions.en.trim(),
+          it: categoryForm.descriptions.it.trim(),
+        },
         sortOrder: Number(categoryForm.sortOrder),
       };
+
+      if (categoryForm.slug.trim()) {
+        body.slug = categoryForm.slug.trim();
+      }
 
       if (categoryForm.id) {
         await apiRequest(`/admin/categories/${categoryForm.id}`, {
@@ -1043,7 +1123,7 @@ export default function AdminDashboardApp() {
   const saveChecklist = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) return;
-    if (!checklistForm.category) {
+    if (!checklistForm.categorySlug) {
       setToast({ kind: "error", message: "Create a category first." });
       return;
     }
@@ -1052,8 +1132,9 @@ export default function AdminDashboardApp() {
     try {
       const body: Record<string, unknown> = {
         title: checklistForm.title,
-        category: checklistForm.category,
+        category: checklistForm.categorySlug,
         description: checklistForm.description,
+        language: checklistForm.language,
         status: checklistForm.status,
         iconUrl: checklistForm.iconUrl,
         iconEmoji: checklistForm.icon,
@@ -1105,7 +1186,7 @@ export default function AdminDashboardApp() {
   const saveSafetyTip = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) return;
-    if (!safetyTipForm.category) {
+    if (!safetyTipForm.categorySlug) {
       setToast({ kind: "error", message: "Create a category first." });
       return;
     }
@@ -1114,7 +1195,7 @@ export default function AdminDashboardApp() {
     try {
       const body: Record<string, unknown> = {
         title: safetyTipForm.title,
-        category: safetyTipForm.category,
+        category: safetyTipForm.categorySlug,
         summary: safetyTipForm.summary,
         status: safetyTipForm.status,
         language: safetyTipForm.language,
@@ -1217,13 +1298,22 @@ export default function AdminDashboardApp() {
     setLoading(true);
 
     try {
+      const current = promptForms[promptLanguage];
       const data = await apiRequest<PromptForm>("/admin/ai-prompt", {
         token,
         method: "PATCH",
-        body: promptForm,
+        body: {
+          language: promptLanguage,
+          welcomeMessage: current.welcomeMessage,
+          systemInstruction: current.systemInstruction,
+          fallbackMessage: current.fallbackMessage,
+        },
       });
-      setPromptForm(data);
-      setToast({ kind: "success", message: "Prompt updated." });
+      setPromptForms((forms) => ({
+        ...forms,
+        [promptLanguage]: { ...data, language: promptLanguage },
+      }));
+      setToast({ kind: "success", message: `Prompt updated (${promptLanguage}).` });
       await refreshAll(token);
     } catch (error) {
       handleRequestError(error);
@@ -1526,55 +1616,78 @@ export default function AdminDashboardApp() {
     );
   };
 
-  const renderPromptSection = () => (
-    <form onSubmit={savePrompt} className="space-y-6">
-      <div className="rounded-[28px] border border-[var(--border)] bg-white p-4 shadow-[0_18px_40px_rgba(26,18,18,0.06)] sm:p-6">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
-              Live AI configuration
-            </p>
-            <h3 className="mt-2 text-xl font-bold text-[#201a1b]">
-              Chat bot modification
-            </h3>
+  const renderPromptSection = () => {
+    const activeForm = promptForms[promptLanguage];
+    const updateActiveForm = (patch: Partial<PromptForm>) =>
+      setPromptForms((forms) => ({
+        ...forms,
+        [promptLanguage]: { ...forms[promptLanguage], ...patch },
+      }));
+
+    return (
+      <form onSubmit={savePrompt} className="space-y-6">
+        <div className="rounded-[28px] border border-[var(--border)] bg-white p-4 shadow-[0_18px_40px_rgba(26,18,18,0.06)] sm:p-6">
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
+                Live AI configuration
+              </p>
+              <h3 className="mt-2 text-xl font-bold text-[#201a1b]">
+                Chat bot modification
+              </h3>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Each language has its own welcome, system instruction, and fallback. The chat uses the
+                prompt that matches the user&apos;s app language.
+              </p>
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-2xl bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--danger-deep)] sm:w-auto"
+            >
+              {loading ? "Saving..." : `Save ${promptLanguage.toUpperCase()} prompt`}
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-2xl bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--danger-deep)] sm:w-auto"
-          >
-            {loading ? "Saving..." : "Save changes"}
-          </button>
+          <div className="mb-5 inline-flex rounded-full border border-[var(--border)] bg-[var(--panel-muted)] p-1">
+            {(["en", "it"] as PromptLanguage[]).map((lang) => (
+              <button
+                key={lang}
+                type="button"
+                onClick={() => setPromptLanguage(lang)}
+                className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
+                  promptLanguage === lang
+                    ? "bg-white text-[var(--danger)] shadow-[0_2px_6px_rgba(216,43,43,0.18)]"
+                    : "text-[var(--muted)] hover:text-[#201a1b]"
+                }`}
+              >
+                {lang === "en" ? "English" : "Italian"}
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-5">
+            <TextAreaField
+              label="Welcome message"
+              value={activeForm.welcomeMessage}
+              onChange={(value) => updateActiveForm({ welcomeMessage: value })}
+              rows={4}
+            />
+            <TextAreaField
+              label="System instruction"
+              value={activeForm.systemInstruction}
+              onChange={(value) => updateActiveForm({ systemInstruction: value })}
+              rows={10}
+            />
+            <TextAreaField
+              label="Fallback response"
+              value={activeForm.fallbackMessage}
+              onChange={(value) => updateActiveForm({ fallbackMessage: value })}
+              rows={4}
+            />
+          </div>
         </div>
-        <div className="grid gap-5">
-          <TextAreaField
-            label="Welcome message"
-            value={promptForm.welcomeMessage}
-            onChange={(value) =>
-              setPromptForm((current) => ({ ...current, welcomeMessage: value }))
-            }
-            rows={4}
-          />
-          <TextAreaField
-            label="System instruction"
-            value={promptForm.systemInstruction}
-            onChange={(value) =>
-              setPromptForm((current) => ({ ...current, systemInstruction: value }))
-            }
-            rows={10}
-          />
-          <TextAreaField
-            label="Fallback response"
-            value={promptForm.fallbackMessage}
-            onChange={(value) =>
-              setPromptForm((current) => ({ ...current, fallbackMessage: value }))
-            }
-            rows={4}
-          />
-        </div>
-      </div>
-    </form>
-  );
+      </form>
+    );
+  };
 
   const renderCategoriesSection = () => (
     <section className="space-y-5">
@@ -1614,13 +1727,24 @@ export default function AdminDashboardApp() {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="truncate text-[1.02rem] font-semibold text-[#2b2526]">
-                    {item.name}
+                    {item.names?.en || item.name}
                   </p>
+                  {item.names?.it ? (
+                    <span className="rounded-full bg-[#f3f4ff] px-2.5 py-1 text-xs font-medium text-[#3b3da9]">
+                      IT: {item.names.it}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-[#fff3e0] px-2.5 py-1 text-xs font-medium text-[#a06400]">
+                      Missing IT translation
+                    </span>
+                  )}
                   <span className="rounded-full bg-[#fff3f3] px-2.5 py-1 text-xs font-semibold text-[var(--danger)]">
                     #{item.sortOrder}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-[#6b6467]">{item.description || item.slug}</p>
+                <p className="mt-1 text-sm text-[#6b6467]">
+                  {item.descriptions?.en || item.description || item.slug}
+                </p>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium text-[#6d6668]">
                   <span>{item.checklistsCount} checklists</span>
                   <span>{item.safetyTipsCount} safety tips</span>
@@ -1641,7 +1765,7 @@ export default function AdminDashboardApp() {
                     setConfirmDialog({
                       kind: "category",
                       id: item.id,
-                      label: item.name,
+                      label: item.names?.en || item.name,
                     })
                   }
                   className="text-[#ef4444] transition hover:text-[#d72d2d]"
@@ -1716,9 +1840,14 @@ export default function AdminDashboardApp() {
                   <p className="truncate text-[1.02rem] font-semibold text-[#2b2526]">
                     {item.title}
                   </p>
-                  <p className="mt-1 text-sm text-[#6b6467]">{item.items.length} Items</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[#6b6467]">
+                    <span>{item.items.length} Items</span>
+                    <span className="text-[#b8b1b4]">•</span>
+                    <span>{languageLabel(item.language)}</span>
+                  </div>
                 </div>
               </div>
+              <StatusBadge value={item.status} />
               <div className="flex w-full items-center justify-end gap-3 sm:w-auto">
                 <button
                   type="button"
@@ -1807,6 +1936,8 @@ export default function AdminDashboardApp() {
                 </p>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[#6b6467]">
                   <span>{item.category}</span>
+                  <span className="text-[#b8b1b4]">•</span>
+                  <span>{languageLabel(item.language)}</span>
                   <span className="text-[#b8b1b4]">•</span>
                   <span>{formatDate(item.updatedAt)}</span>
                 </div>
@@ -2263,14 +2394,68 @@ export default function AdminDashboardApp() {
         onClose={() => setCategoryModalOpen(false)}
       >
         <form onSubmit={saveCategory} className="space-y-6">
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel-muted)] p-4">
+            <p className="text-sm font-semibold text-[#201a1b]">Localized labels</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              The mobile app shows the label that matches the user&apos;s language. English is required.
+            </p>
+            <div className="mt-4 grid gap-5 md:grid-cols-2">
+              <Field
+                label="Name (English)"
+                value={categoryForm.names.en}
+                onChange={(value) =>
+                  setCategoryForm((current) => ({
+                    ...current,
+                    names: { ...current.names, en: value },
+                  }))
+                }
+                placeholder="Flood"
+              />
+              <Field
+                label="Name (Italian)"
+                value={categoryForm.names.it}
+                onChange={(value) =>
+                  setCategoryForm((current) => ({
+                    ...current,
+                    names: { ...current.names, it: value },
+                  }))
+                }
+                placeholder="Alluvione"
+              />
+            </div>
+            <div className="mt-4 grid gap-5 md:grid-cols-2">
+              <TextAreaField
+                label="Description (English)"
+                value={categoryForm.descriptions.en}
+                onChange={(value) =>
+                  setCategoryForm((current) => ({
+                    ...current,
+                    descriptions: { ...current.descriptions, en: value },
+                  }))
+                }
+                rows={3}
+              />
+              <TextAreaField
+                label="Description (Italian)"
+                value={categoryForm.descriptions.it}
+                onChange={(value) =>
+                  setCategoryForm((current) => ({
+                    ...current,
+                    descriptions: { ...current.descriptions, it: value },
+                  }))
+                }
+                rows={3}
+              />
+            </div>
+          </div>
           <div className="grid gap-5 md:grid-cols-2">
             <Field
-              label="Category name"
-              value={categoryForm.name}
+              label="Slug (optional)"
+              value={categoryForm.slug}
               onChange={(value) =>
-                setCategoryForm((current) => ({ ...current, name: value }))
+                setCategoryForm((current) => ({ ...current, slug: value }))
               }
-              placeholder="Flood"
+              placeholder="auto-generated from English name"
             />
             <Field
               label="Sort order"
@@ -2285,14 +2470,6 @@ export default function AdminDashboardApp() {
               placeholder="1"
             />
           </div>
-          <TextAreaField
-            label="Description"
-            value={categoryForm.description}
-            onChange={(value) =>
-              setCategoryForm((current) => ({ ...current, description: value }))
-            }
-            rows={4}
-          />
           <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-2 sm:flex-row sm:justify-end">
             <button
               type="button"
@@ -2335,25 +2512,25 @@ export default function AdminDashboardApp() {
             <label className="flex flex-col gap-2">
               <span className="text-sm font-semibold text-[#33292b]">Category</span>
               <select
-                value={checklistForm.category}
+                value={checklistForm.categorySlug}
                 onChange={(event) =>
                   setChecklistForm((current) => ({
                     ...current,
-                    category: event.target.value,
+                    categorySlug: event.target.value,
                   }))
                 }
                 className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
               >
                 {categories.map((category) => (
-                  <option key={category.id} value={category.name}>
-                    {category.name}
+                  <option key={category.id} value={category.slug}>
+                    {category.names?.en || category.name}
                   </option>
                 ))}
               </select>
             </label>
           </div>
 
-          <div className="grid gap-5 md:grid-cols-[0.6fr_1.4fr]">
+          <div className="grid gap-5 md:grid-cols-[0.6fr_0.6fr_1.4fr]">
             <label className="flex flex-col gap-2">
               <span className="text-sm font-semibold text-[#33292b]">Status</span>
               <select
@@ -2368,6 +2545,25 @@ export default function AdminDashboardApp() {
               >
                 <option value="published">Published</option>
                 <option value="draft">Draft</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-semibold text-[#33292b]">Language</span>
+              <select
+                value={checklistForm.language}
+                onChange={(event) =>
+                  setChecklistForm((current) => ({
+                    ...current,
+                    language: event.target.value,
+                  }))
+                }
+                className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
+              >
+                {languageOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -2599,18 +2795,18 @@ export default function AdminDashboardApp() {
             <label className="flex flex-col gap-2">
               <span className="text-sm font-semibold text-[#33292b]">Category</span>
               <select
-                value={safetyTipForm.category}
+                value={safetyTipForm.categorySlug}
                 onChange={(event) =>
                   setSafetyTipForm((current) => ({
                     ...current,
-                    category: event.target.value,
+                    categorySlug: event.target.value,
                   }))
                 }
                 className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
               >
                 {categories.map((category) => (
-                  <option key={category.id} value={category.name}>
-                    {category.name}
+                  <option key={category.id} value={category.slug}>
+                    {category.names?.en || category.name}
                   </option>
                 ))}
               </select>
@@ -2631,14 +2827,25 @@ export default function AdminDashboardApp() {
                 <option value="draft">Draft</option>
               </select>
             </label>
-            <Field
-              label="Language"
-              value={safetyTipForm.language}
-              onChange={(value) =>
-                setSafetyTipForm((current) => ({ ...current, language: value }))
-              }
-              placeholder="en"
-            />
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-semibold text-[#33292b]">Language</span>
+              <select
+                value={safetyTipForm.language}
+                onChange={(event) =>
+                  setSafetyTipForm((current) => ({
+                    ...current,
+                    language: event.target.value,
+                  }))
+                }
+                className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
+              >
+                {languageOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
