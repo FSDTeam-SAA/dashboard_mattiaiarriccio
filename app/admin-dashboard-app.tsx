@@ -1353,6 +1353,24 @@ export default function AdminDashboardApp() {
     }
   };
 
+  const persistAdminAvatar = async (
+    nextAvatarUrl: string,
+    currentToken: string
+  ) => {
+    const body: Record<string, unknown> = { avatarUrl: nextAvatarUrl };
+    if (!nextAvatarUrl) {
+      body.removeAvatarUrl = true;
+    }
+
+    const data = await apiRequest<AdminProfile>("/admin/settings", {
+      token: currentToken,
+      method: "PATCH",
+      body,
+    });
+    setAdminProfile(data);
+    return data;
+  };
+
   const handleMediaUpload = async (
     event: ChangeEvent<HTMLInputElement>,
     folder: string,
@@ -1375,15 +1393,14 @@ export default function AdminDashboardApp() {
 
       if (scope === "checklist") {
         setChecklistForm((current) => ({ ...current, [field]: secureUrl }));
+        setToast({ kind: "success", message: "Media uploaded successfully." });
       } else if (scope === "profile") {
-        setAdminProfile((current) =>
-          current ? { ...current, avatarUrl: secureUrl } : current
-        );
+        await persistAdminAvatar(secureUrl, token);
+        setToast({ kind: "success", message: "Avatar uploaded successfully." });
       } else {
         setSafetyTipForm((current) => ({ ...current, [field]: secureUrl }));
+        setToast({ kind: "success", message: "Media uploaded successfully." });
       }
-
-      setToast({ kind: "success", message: "Media uploaded successfully." });
     } catch (error) {
       handleRequestError(error);
     } finally {
@@ -1392,20 +1409,38 @@ export default function AdminDashboardApp() {
     }
   };
 
-  const handleMediaRemove = (
+  const handleMediaRemove = async (
     scope: "checklist" | "tip" | "profile",
     field: "iconUrl" | "coverImageUrl" | "thumbnailUrl" | "avatarUrl"
   ) => {
     if (scope === "checklist") {
       setChecklistForm((current) => ({ ...current, [field]: "" }));
-    } else if (scope === "profile") {
-      setAdminProfile((current) =>
-        current ? { ...current, avatarUrl: "" } : current
-      );
-    } else {
-      setSafetyTipForm((current) => ({ ...current, [field]: "" }));
+      setToast({
+        kind: "success",
+        message: "Image removed. Save changes to apply.",
+      });
+      return;
     }
-    setToast({ kind: "success", message: "Image removed. Save changes to apply." });
+
+    if (scope === "tip") {
+      setSafetyTipForm((current) => ({ ...current, [field]: "" }));
+      setToast({
+        kind: "success",
+        message: "Image removed. Save changes to apply.",
+      });
+      return;
+    }
+
+    if (!token) return;
+    setLoading(true);
+    try {
+      await persistAdminAvatar("", token);
+      setToast({ kind: "success", message: "Avatar removed." });
+    } catch (error) {
+      handleRequestError(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderAuthPanel = () => {
