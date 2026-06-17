@@ -3,7 +3,6 @@
 import {
   ChangeEvent,
   FormEvent,
-  ReactNode,
   useEffect,
   useMemo,
   useState,
@@ -16,6 +15,29 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  apiRequest,
+  uploadAsset,
+  type ApiErrorShape,
+} from "@/lib/api-client";
+import { classNames, formatDate, formatRelativeTime } from "@/lib/format";
+import {
+  AppIcon,
+  BrandMark,
+  Field,
+  Modal,
+  StatCard,
+  StatusBadge,
+  TextAreaField,
+} from "@/components/ui/primitives";
+import type { Notify } from "@/components/sections/types";
+import { UsersSection } from "@/components/sections/users-section";
+import { CouponsSection } from "@/components/sections/coupons-section";
+import { SystemSettingsSection } from "@/components/sections/system-settings-section";
+import { AdsSection } from "@/components/sections/ads-section";
+import { EmergencyResponsesSection } from "@/components/sections/emergency-responses-section";
+import { MaterialsSection } from "@/components/sections/materials-section";
+import { NotificationsSection } from "@/components/sections/notifications-section";
 
 type AuthMode = "login" | "forgot" | "otp" | "reset";
 type Section =
@@ -24,7 +46,14 @@ type Section =
   | "categories"
   | "checklists"
   | "tips"
-  | "settings";
+  | "settings"
+  | "users"
+  | "coupons"
+  | "appsettings"
+  | "ads"
+  | "emergency"
+  | "materials"
+  | "notifications";
 type ToastState = { kind: "success" | "error"; message: string } | null;
 
 type DashboardData = {
@@ -170,11 +199,6 @@ type SafetyTipFormState = {
   tags: string[];
 };
 
-type ApiErrorShape = Error & { status?: number };
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api/v1";
-
 const navItems: Array<{ id: Section; label: string; eyebrow: string }> = [
   { id: "dashboard", label: "Dashboard", eyebrow: "Overview" },
   { id: "prompt", label: "Chat bot prompts", eyebrow: "AI" },
@@ -182,6 +206,13 @@ const navItems: Array<{ id: Section; label: string; eyebrow: string }> = [
   { id: "checklists", label: "Checklists", eyebrow: "Preparedness" },
   { id: "tips", label: "Safety tips", eyebrow: "Guides" },
   { id: "settings", label: "Settings", eyebrow: "Profile" },
+  { id: "users", label: "Users", eyebrow: "Members" },
+  { id: "coupons", label: "Coupons", eyebrow: "Access codes" },
+  { id: "appsettings", label: "App settings", eyebrow: "Limits & rules" },
+  { id: "ads", label: "Ads", eyebrow: "Monetization" },
+  { id: "emergency", label: "Emergency responses", eyebrow: "Override" },
+  { id: "materials", label: "Materials", eyebrow: "Oversight" },
+  { id: "notifications", label: "Notifications", eyebrow: "Monitoring" },
 ];
 
 const languageOptions = [
@@ -252,30 +283,6 @@ const emptyPromptBundle = (): PromptFormBundle => ({
   it: emptyPromptForm("it"),
 });
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-
-const formatRelativeTime = (value: string) => {
-  const diffMs = Date.now() - new Date(value).getTime();
-  const diffMinutes = Math.max(Math.round(diffMs / 60000), 0);
-
-  if (diffMinutes < 1) return "Just now";
-  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
-
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
-
-  const diffDays = Math.round(diffHours / 24);
-  return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
-};
-
-const classNames = (...values: Array<string | false | null | undefined>) =>
-  values.filter(Boolean).join(" ");
-
 const getSectionIconName = (section: Section) =>
   section === "dashboard"
     ? "dashboard"
@@ -287,391 +294,21 @@ const getSectionIconName = (section: Section) =>
         ? "checklists"
         : section === "tips"
           ? "tips"
-          : "settings";
-
-function AppIcon({
-  name,
-  className,
-}: {
-  name:
-    | "dashboard"
-    | "prompt"
-    | "categories"
-    | "checklists"
-    | "tips"
-    | "settings"
-    | "logout"
-    | "edit"
-    | "delete"
-    | "clock"
-    | "chevron"
-    | "users"
-    | "published";
-  className?: string;
-}) {
-  const sharedProps = {
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    className,
-  };
-
-  switch (name) {
-    case "dashboard":
-      return (
-        <svg {...sharedProps}>
-          <rect x="3" y="3" width="7" height="7" rx="1.5" />
-          <rect x="14" y="3" width="7" height="7" rx="1.5" />
-          <rect x="3" y="14" width="7" height="7" rx="1.5" />
-          <rect x="14" y="14" width="7" height="7" rx="1.5" />
-        </svg>
-      );
-    case "prompt":
-      return (
-        <svg {...sharedProps}>
-          <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4 4v-4H7.5A2.5 2.5 0 0 1 5 12.5z" />
-          <path d="M8.5 8.5h7" />
-          <path d="M8.5 11.5h4.5" />
-        </svg>
-      );
-    case "categories":
-      return (
-        <svg {...sharedProps}>
-          <path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Z" />
-          <path d="M4 12.5 12 17l8-4.5" />
-          <path d="M4 17.5 12 22l8-4.5" />
-        </svg>
-      );
-    case "checklists":
-      return (
-        <svg {...sharedProps}>
-          <path d="M9 4h10a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />
-          <path d="M8 7H5" />
-          <path d="m4 7 .8.8L6.5 6" />
-          <path d="M8 12H5" />
-          <path d="m4 12 .8.8L6.5 11" />
-          <path d="M8 17H5" />
-          <path d="m4 17 .8.8L6.5 16" />
-        </svg>
-      );
-    case "tips":
-      return (
-        <svg {...sharedProps}>
-          <path d="M12 3a6 6 0 0 1 3.72 10.71c-.92.74-1.47 1.44-1.66 2.29h-4.12c-.19-.85-.74-1.55-1.66-2.29A6 6 0 0 1 12 3Z" />
-          <path d="M10 19h4" />
-          <path d="M10.5 22h3" />
-        </svg>
-      );
-    case "settings":
-      return (
-        <svg {...sharedProps}>
-          <circle cx="12" cy="12" r="3.2" />
-          <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1 1a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.4a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.7-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1-1a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.4a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.7 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.4a1 1 0 0 1 1 1v.2a1 1 0 0 0 .7.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a1 1 0 0 1 1 1v1.4a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.7Z" />
-        </svg>
-      );
-    case "logout":
-      return (
-        <svg {...sharedProps}>
-          <path d="M15 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3" />
-          <path d="M10 17l5-5-5-5" />
-          <path d="M15 12H4" />
-        </svg>
-      );
-    case "edit":
-      return (
-        <svg {...sharedProps}>
-          <path d="M3 21h6" />
-          <path d="M14.7 5.3a2.1 2.1 0 1 1 3 3L8 18l-4 1 1-4Z" />
-        </svg>
-      );
-    case "delete":
-      return (
-        <svg {...sharedProps}>
-          <path d="M4 7h16" />
-          <path d="M10 11v6" />
-          <path d="M14 11v6" />
-          <path d="M6 7l1 12a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9L18 7" />
-          <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-        </svg>
-      );
-    case "clock":
-      return (
-        <svg {...sharedProps}>
-          <circle cx="12" cy="12" r="8" />
-          <path d="M12 8v4l2.5 1.5" />
-        </svg>
-      );
-    case "chevron":
-      return (
-        <svg {...sharedProps}>
-          <path d="m9 6 6 6-6 6" />
-        </svg>
-      );
-    case "users":
-      return (
-        <svg {...sharedProps}>
-          <path d="M16 21v-1.5a3.5 3.5 0 0 0-3.5-3.5h-4A3.5 3.5 0 0 0 5 19.5V21" />
-          <circle cx="10.5" cy="8" r="3.5" />
-          <path d="M17 11a3 3 0 1 0 0-6" />
-          <path d="M19 21v-1a3 3 0 0 0-2-2.82" />
-        </svg>
-      );
-    case "published":
-      return (
-        <svg {...sharedProps}>
-          <circle cx="12" cy="12" r="8" />
-          <path d="m8.5 12.5 2.2 2.2 4.8-5.2" />
-        </svg>
-      );
-  }
-}
-
-function BrandMark() {
-  return (
-    <div className="inline-flex items-end gap-1 text-[#1d1718]">
-      <span className="text-[17px] font-black tracking-[0.12em]">WE</span>
-      <svg
-        viewBox="0 0 52 18"
-        className="h-[18px] w-[52px] text-[var(--danger)]"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.1"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M1 10h10l3-7 5 13 4-9h8l3-4 3 7h14" />
-      </svg>
-      <span className="text-[17px] font-black tracking-[0.12em]">SAFE</span>
-    </div>
-  );
-}
-
-async function apiRequest<T>(
-  path: string,
-  {
-    token,
-    method = "GET",
-    body,
-    isFormData = false,
-  }: {
-    token?: string | null;
-    method?: string;
-    body?: unknown;
-    isFormData?: boolean;
-  } = {}
-): Promise<T> {
-  const headers = new Headers();
-
-  if (!isFormData) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: isFormData ? (body as BodyInit) : body ? JSON.stringify(body) : undefined,
-  });
-
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    const error = new Error(payload?.message || "Request failed") as ApiErrorShape;
-    error.status = response.status;
-    throw error;
-  }
-
-  return payload?.data as T;
-}
-
-async function uploadAsset(
-  file: File,
-  folder: string,
-  token: string | null
-): Promise<string> {
-  const formData = new FormData();
-  formData.append("image", file);
-  formData.append("folder", folder);
-
-  const data = await apiRequest<{ secure_url: string }>("/uploads", {
-    token,
-    method: "POST",
-    body: formData,
-    isFormData: true,
-  });
-
-  return data.secure_url;
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  type = "text",
-  placeholder,
-  readOnly = false,
-}: {
-  label: string;
-  value: string | number;
-  onChange: (value: string) => void;
-  type?: string;
-  placeholder?: string;
-  readOnly?: boolean;
-}) {
-  return (
-    <label className="flex flex-col gap-2">
-      <span className="text-sm font-semibold text-[#33292b]">{label}</span>
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        readOnly={readOnly}
-        onChange={(event) => onChange(event.target.value)}
-        className={classNames(
-          "rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]",
-          readOnly && "cursor-not-allowed bg-[#f5efef] text-[var(--muted)]"
-        )}
-      />
-    </label>
-  );
-}
-
-function TextAreaField({
-  label,
-  value,
-  onChange,
-  rows = 5,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  rows?: number;
-}) {
-  return (
-    <label className="flex flex-col gap-2">
-      <span className="text-sm font-semibold text-[#33292b]">{label}</span>
-      <textarea
-        value={value}
-        rows={rows}
-        onChange={(event) => onChange(event.target.value)}
-        className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
-      />
-    </label>
-  );
-}
-
-function Modal({
-  open,
-  title,
-  subtitle,
-  children,
-  onClose,
-}: {
-  open: boolean;
-  title: string;
-  subtitle?: string;
-  children: ReactNode;
-  onClose: () => void;
-}) {
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/45 px-4 py-4 sm:flex sm:items-center sm:justify-center sm:py-8">
-      <div className="scrollbar-thin mx-auto w-full max-w-4xl overflow-y-auto rounded-[24px] border border-white/50 bg-[var(--panel)] shadow-[var(--shadow)] sm:max-h-full sm:rounded-[28px]">
-        <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-[var(--border)] bg-[var(--panel)] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6 sm:py-5">
-          <div>
-            <h3 className="text-xl font-bold text-[#201a1b]">{title}</h3>
-            {subtitle ? (
-              <p className="mt-1 text-sm text-[var(--muted)]">{subtitle}</p>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="self-start rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
-          >
-            Close
-          </button>
-        </div>
-        <div className="px-4 py-4 sm:px-6 sm:py-6">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function StatusBadge({ value }: { value: string }) {
-  const tone =
-    value === "published"
-      ? "bg-emerald-100 text-emerald-700"
-      : "bg-amber-100 text-amber-700";
-
-  return (
-    <span className={classNames("rounded-full px-3 py-1 text-xs font-semibold", tone)}>
-      {value}
-    </span>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  tone,
-  icon,
-}: {
-  label: string;
-  value: string;
-  tone: "red" | "blue" | "rose" | "green";
-  icon: "checklists" | "tips" | "prompt" | "published";
-}) {
-  const toneMap = {
-    red: {
-      border: "border-b-[#de3232]",
-      bubble: "bg-[#de3232]",
-    },
-    blue: {
-      border: "border-b-[#166ec8]",
-      bubble: "bg-[#166ec8]",
-    },
-    rose: {
-      border: "border-b-[#ff8e8e]",
-      bubble: "bg-[#ff8e8e]",
-    },
-    green: {
-      border: "border-b-[#148a45]",
-      bubble: "bg-[#148a45]",
-    },
-  }[tone];
-
-  return (
-    <div
-      className={classNames(
-        "rounded-[12px] border border-[#ece4e4] border-b-[3px] bg-white px-5 py-4 shadow-[0_10px_28px_rgba(22,18,18,0.06)]",
-        toneMap.border
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[1.75rem] font-semibold leading-none text-[#252022]">{value}</p>
-          <p className="mt-4 text-sm font-medium text-[#322b2d]">{label}</p>
-        </div>
-        <div
-          className={classNames(
-            "grid h-9 w-9 place-items-center rounded-full text-white shadow-[0_10px_20px_rgba(0,0,0,0.08)]",
-            toneMap.bubble
-          )}
-        >
-          <AppIcon name={icon} className="h-[18px] w-[18px]" />
-        </div>
-      </div>
-    </div>
-  );
-}
+          : section === "settings"
+            ? "settings"
+            : section === "users"
+              ? "users"
+              : section === "coupons"
+                ? "coupon"
+                : section === "appsettings"
+                  ? "settings"
+                  : section === "ads"
+                    ? "ads"
+                    : section === "emergency"
+                      ? "emergency"
+                      : section === "materials"
+                        ? "materials"
+                        : "notifications";
 
 export default function AdminDashboardApp() {
   const [booting, setBooting] = useState(true);
@@ -744,6 +381,8 @@ export default function AdminDashboardApp() {
     const timeout = window.setTimeout(() => setToast(null), 3200);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  const notify: Notify = (kind, message) => setToast({ kind, message });
 
   const handleLogout = (showToast = true) => {
     window.localStorage.removeItem("wesafe-admin-token");
@@ -2180,6 +1819,41 @@ export default function AdminDashboardApp() {
       title: "Settings",
       description: "Manage your admin profile and account details",
     },
+    users: {
+      eyebrow: "Members",
+      title: "Users",
+      description: "Review members and manage premium access.",
+    },
+    coupons: {
+      eyebrow: "Access codes",
+      title: "Coupons",
+      description: "Issue and manage premium access codes.",
+    },
+    appsettings: {
+      eyebrow: "Limits & rules",
+      title: "App settings",
+      description: "Tune free-tier limits, prompts, and access rules.",
+    },
+    ads: {
+      eyebrow: "Monetization",
+      title: "Ads",
+      description: "Configure ad placements and unit identifiers.",
+    },
+    emergency: {
+      eyebrow: "Override",
+      title: "Emergency responses",
+      description: "Manage emergency override response templates.",
+    },
+    materials: {
+      eyebrow: "Oversight",
+      title: "Materials",
+      description: "Monitor user materials and expirations.",
+    },
+    notifications: {
+      eyebrow: "Monitoring",
+      title: "Notifications",
+      description: "Monitor scheduled and delivered notifications.",
+    },
   };
 
   const currentSection = sectionMeta[activeSection];
@@ -2196,6 +1870,20 @@ export default function AdminDashboardApp() {
         return renderTipsSection();
       case "settings":
         return renderSettingsSection();
+      case "users":
+        return <UsersSection token={token} notify={notify} />;
+      case "coupons":
+        return <CouponsSection token={token} notify={notify} />;
+      case "appsettings":
+        return <SystemSettingsSection token={token} notify={notify} />;
+      case "ads":
+        return <AdsSection token={token} notify={notify} />;
+      case "emergency":
+        return <EmergencyResponsesSection token={token} notify={notify} />;
+      case "materials":
+        return <MaterialsSection token={token} notify={notify} />;
+      case "notifications":
+        return <NotificationsSection token={token} notify={notify} />;
       default:
         return renderDashboardSection();
     }
