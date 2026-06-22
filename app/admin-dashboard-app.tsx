@@ -20,7 +20,7 @@ import {
   uploadAsset,
   type ApiErrorShape,
 } from "@/lib/api-client";
-import { classNames, formatDate, formatRelativeTime } from "@/lib/format";
+import { classNames, formatDate, formatRelativeTime, uid } from "@/lib/format";
 import {
   AppIcon,
   BrandMark,
@@ -232,7 +232,7 @@ const emptyChecklistForm = (defaultCategorySlug = ""): ChecklistFormState => ({
   iconUrl: "",
   icon: "",
   coverImageUrl: "",
-  items: [{ id: crypto.randomUUID(), text: "", icon: "" }],
+  items: [{ id: uid(), text: "", icon: "" }],
 });
 
 const ALLOWED_IMAGE_MIME_PREFIX = "image/";
@@ -2407,7 +2407,7 @@ export default function AdminDashboardApp() {
                     ...current,
                     items: [
                       ...current.items,
-                      { id: crypto.randomUUID(), text: "", icon: "" },
+                      { id: uid(), text: "", icon: "" },
                     ],
                   }))
                 }
