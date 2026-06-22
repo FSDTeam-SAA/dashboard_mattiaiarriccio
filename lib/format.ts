@@ -1,6 +1,22 @@
 export const classNames = (...values: Array<string | false | null | undefined>) =>
   values.filter(Boolean).join(" ");
 
+/**
+ * Generates a unique client-side id. `crypto.randomUUID()` only exists in a
+ * secure context (HTTPS or localhost); on plain-HTTP hosts (e.g. a VPS served
+ * over http://) it is undefined, so we fall back to a timestamp + random string.
+ */
+export const uid = (): string => {
+  if (
+    typeof globalThis !== "undefined" &&
+    globalThis.crypto &&
+    typeof globalThis.crypto.randomUUID === "function"
+  ) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
 export const formatDate = (value: string) =>
   new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
