@@ -16,6 +16,11 @@ type AccessRules = {
   maxFreeMaterials: number;
 };
 
+type ChatWelcomeMessage = {
+  en: string;
+  it: string;
+};
+
 type AppSettings = {
   freeDailyMessageLimit: number;
   freeDailyChatLimit: number;
@@ -24,6 +29,7 @@ type AppSettings = {
   accessRules: AccessRules;
   emergencyOverrideEnabled: boolean;
   notificationsEnabled: boolean;
+  chatWelcomeMessage?: ChatWelcomeMessage;
   // optional / not edited here
   updatedAt?: string;
   adsEnabled?: boolean;
@@ -32,7 +38,7 @@ type AppSettings = {
   reminderDefaults?: unknown;
 };
 
-type SaveKey = "limits" | "prompts" | "access" | "toggles";
+type SaveKey = "limits" | "prompts" | "access" | "toggles" | "welcome";
 
 const PANEL_CARD =
   "rounded-[28px] border border-[var(--border)] bg-white p-5 shadow-[0_18px_40px_rgba(26,18,18,0.06)] sm:p-6";
@@ -70,6 +76,10 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
   const [emergencyOverrideEnabled, setEmergencyOverrideEnabled] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
+  // Chat welcome message
+  const [welcomeEn, setWelcomeEn] = useState("");
+  const [welcomeIt, setWelcomeIt] = useState("");
+
   const hydrate = useCallback((data: AppSettings) => {
     const accessRules = data.accessRules ?? DEFAULT_ACCESS_RULES;
     setSettings(data);
@@ -82,6 +92,8 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
     setMaxFreeMaterials(Number(accessRules.maxFreeMaterials ?? 0));
     setEmergencyOverrideEnabled(Boolean(data.emergencyOverrideEnabled));
     setNotificationsEnabled(Boolean(data.notificationsEnabled));
+    setWelcomeEn(data.chatWelcomeMessage?.en ?? "");
+    setWelcomeIt(data.chatWelcomeMessage?.it ?? "");
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -188,6 +200,23 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
       "toggles",
       { emergencyOverrideEnabled, notificationsEnabled },
       "Feature toggles updated."
+    );
+  };
+
+  const saveWelcome = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!welcomeEn.trim()) {
+      notify("error", "English welcome message cannot be empty.");
+      return;
+    }
+    if (!welcomeIt.trim()) {
+      notify("error", "Italian welcome message cannot be empty.");
+      return;
+    }
+    void patchSettings(
+      "welcome",
+      { chatWelcomeMessage: { en: welcomeEn.trim(), it: welcomeIt.trim() } },
+      "Welcome message updated."
     );
   };
 
@@ -346,6 +375,55 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
             <div className="mt-6 flex justify-end">
               <button type="submit" disabled={savingKey === "prompts"} className={PRIMARY_BUTTON}>
                 {savingKey === "prompts" ? "Saving..." : "Save prompts"}
+              </button>
+            </div>
+          </form>
+
+          {/* Chat welcome message */}
+          <form onSubmit={saveWelcome} className={classNames(PANEL_CARD, "xl:col-span-2")}>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
+                  Chat
+                </p>
+                <h3 className="mt-2 text-xl font-bold text-[#201a1b]">Welcome message</h3>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Shown to users when they open the chat for the first time. Supports markdown.
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-2 self-start rounded-full bg-[#fff3f3] px-3 py-1 text-xs font-semibold text-[var(--danger)]">
+                Changes apply live
+              </span>
+            </div>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-[#201a1b]">
+                  🇬🇧 English
+                </label>
+                <textarea
+                  value={welcomeEn}
+                  onChange={(e) => setWelcomeEn(e.target.value)}
+                  rows={10}
+                  className="w-full rounded-2xl border border-[var(--border)] bg-[#fafafa] px-4 py-3 text-sm text-[#201a1b] outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[var(--danger)]/20 resize-y"
+                  placeholder="Hello 👋 I'm WeSafe AI..."
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-[#201a1b]">
+                  🇮🇹 Italian
+                </label>
+                <textarea
+                  value={welcomeIt}
+                  onChange={(e) => setWelcomeIt(e.target.value)}
+                  rows={10}
+                  className="w-full rounded-2xl border border-[var(--border)] bg-[#fafafa] px-4 py-3 text-sm text-[#201a1b] outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[var(--danger)]/20 resize-y"
+                  placeholder="Ciao 👋 Sono WeSafe AI..."
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button type="submit" disabled={savingKey === "welcome"} className={PRIMARY_BUTTON}>
+                {savingKey === "welcome" ? "Saving..." : "Save welcome message"}
               </button>
             </div>
           </form>
