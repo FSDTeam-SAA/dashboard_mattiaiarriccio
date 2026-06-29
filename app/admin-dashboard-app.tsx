@@ -206,18 +206,18 @@ type SafetyTipFormState = {
 
 const navItems: Array<{ id: Section; label: string; eyebrow: string }> = [
   { id: "dashboard", label: "Dashboard", eyebrow: "Overview" },
-  { id: "prompt", label: "Chat bot prompts", eyebrow: "AI" },
   { id: "categories", label: "Categories", eyebrow: "Library" },
   { id: "checklists", label: "Checklists", eyebrow: "Preparedness" },
   { id: "tips", label: "Safety tips", eyebrow: "Guides" },
-  { id: "settings", label: "Settings", eyebrow: "Profile" },
+  { id: "prompt", label: "Chat bot prompts", eyebrow: "AI" },
+  { id: "emergency", label: "Smart playbooks", eyebrow: "Emergency AI" },
   { id: "users", label: "Users", eyebrow: "Members" },
   { id: "coupons", label: "Coupons", eyebrow: "Access codes" },
   { id: "appsettings", label: "Premium permissions", eyebrow: "Limits & rules" },
   { id: "ads", label: "Ads", eyebrow: "Monetization" },
-  { id: "emergency", label: "Smart playbooks", eyebrow: "Emergency AI" },
   { id: "materials", label: "Materials", eyebrow: "Oversight" },
   { id: "notifications", label: "Notifications", eyebrow: "Monitoring" },
+  { id: "settings", label: "Settings", eyebrow: "Profile" },
 ];
 
 const languageOptions = [
