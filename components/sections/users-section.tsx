@@ -235,9 +235,9 @@ export function UsersSection({ token, notify }: SectionProps) {
     setActionLoading(true);
 
     try {
-      let updated: UserDetail;
+      let updatedUser: UserDetail["user"];
       if (confirm.kind === "grant") {
-        updated = await apiRequest<UserDetail>(
+        updatedUser = await apiRequest<UserDetail["user"]>(
           `/admin/users/${userId}/grant-premium`,
           {
             token,
@@ -247,7 +247,7 @@ export function UsersSection({ token, notify }: SectionProps) {
         );
         notify("success", "Premium granted.");
       } else {
-        updated = await apiRequest<UserDetail>(
+        updatedUser = await apiRequest<UserDetail["user"]>(
           `/admin/users/${userId}/revoke-premium`,
           {
             token,
@@ -257,8 +257,14 @@ export function UsersSection({ token, notify }: SectionProps) {
         notify("success", "Premium revoked.");
       }
 
-      setDetail(updated);
+      setDetail((current) =>
+        current ? { ...current, user: { ...current.user, ...updatedUser } } : current
+      );
       setConfirm(null);
+      const refreshed = await apiRequest<UserDetail>(`/admin/users/${userId}`, {
+        token,
+      });
+      setDetail(refreshed);
       await fetchUsers(page, appliedSearch, tierFilter);
     } catch (error) {
       const e = error as ApiErrorShape;

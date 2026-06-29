@@ -83,6 +83,7 @@ type PromptForm = {
   welcomeMessage: string;
   systemInstruction: string;
   fallbackMessage: string;
+  suggestedQuestions: string[];
 };
 
 type PromptFormBundle = {
@@ -120,6 +121,7 @@ type ChecklistRecord = {
   icon: string;
   coverImageUrl: string;
   status: string;
+  premiumOnly: boolean;
   items: Array<{ id: string; text: string; order: number; icon: string }>;
   updatedAt: string;
 };
@@ -151,6 +153,7 @@ type SafetyTipRecord = {
   status: string;
   language: string;
   featured: boolean;
+  premiumOnly: boolean;
   estimatedReadMinutes: number;
   coverImageUrl: string;
   thumbnailUrl: string;
@@ -171,6 +174,7 @@ type ChecklistFormState = {
   iconUrl: string;
   icon: string;
   coverImageUrl: string;
+  premiumOnly: boolean;
   items: Array<{ id: string; text: string; icon: string }>;
 };
 
@@ -190,6 +194,7 @@ type SafetyTipFormState = {
   status: string;
   language: string;
   featured: boolean;
+  premiumOnly: boolean;
   estimatedReadMinutes: number;
   coverImageUrl: string;
   thumbnailUrl: string;
@@ -208,7 +213,7 @@ const navItems: Array<{ id: Section; label: string; eyebrow: string }> = [
   { id: "settings", label: "Settings", eyebrow: "Profile" },
   { id: "users", label: "Users", eyebrow: "Members" },
   { id: "coupons", label: "Coupons", eyebrow: "Access codes" },
-  { id: "appsettings", label: "App settings", eyebrow: "Limits & rules" },
+  { id: "appsettings", label: "Premium permissions", eyebrow: "Limits & rules" },
   { id: "ads", label: "Ads", eyebrow: "Monetization" },
   { id: "emergency", label: "Emergency responses", eyebrow: "Override" },
   { id: "materials", label: "Materials", eyebrow: "Oversight" },
@@ -232,6 +237,7 @@ const emptyChecklistForm = (defaultCategorySlug = ""): ChecklistFormState => ({
   iconUrl: "",
   icon: "",
   coverImageUrl: "",
+  premiumOnly: false,
   items: [{ id: uid(), text: "", icon: "" }],
 });
 
@@ -262,6 +268,7 @@ const emptySafetyTipForm = (defaultCategorySlug = ""): SafetyTipFormState => ({
   status: "published",
   language: "en",
   featured: false,
+  premiumOnly: false,
   estimatedReadMinutes: 4,
   coverImageUrl: "",
   thumbnailUrl: "",
@@ -276,6 +283,7 @@ const emptyPromptForm = (language: PromptLanguage): PromptForm => ({
   welcomeMessage: "",
   systemInstruction: "",
   fallbackMessage: "",
+  suggestedQuestions: [],
 });
 
 const emptyPromptBundle = (): PromptFormBundle => ({
@@ -459,8 +467,8 @@ export default function AdminDashboardApp() {
 
       setDashboard(dashboardData);
       setPromptForms({
-        en: { ...promptData.en, language: "en" },
-        it: { ...promptData.it, language: "it" },
+        en: { ...promptData.en, language: "en", suggestedQuestions: promptData.en.suggestedQuestions || [] },
+        it: { ...promptData.it, language: "it", suggestedQuestions: promptData.it.suggestedQuestions || [] },
       });
       setCategories(categoryData);
       setChecklists(checklistData);
@@ -663,6 +671,7 @@ export default function AdminDashboardApp() {
         iconUrl: record.iconUrl,
         icon: record.icon || "",
         coverImageUrl: record.coverImageUrl,
+        premiumOnly: Boolean(record.premiumOnly),
         items: record.items.map((item) => ({
           id: item.id,
           text: item.text,
@@ -686,6 +695,7 @@ export default function AdminDashboardApp() {
         status: record.status,
         language: record.language || "en",
         featured: record.featured,
+        premiumOnly: Boolean(record.premiumOnly),
         estimatedReadMinutes: record.estimatedReadMinutes,
         coverImageUrl: record.coverImageUrl,
         thumbnailUrl: record.thumbnailUrl,
@@ -778,6 +788,7 @@ export default function AdminDashboardApp() {
         iconUrl: checklistForm.iconUrl,
         iconEmoji: checklistForm.icon,
         coverImageUrl: checklistForm.coverImageUrl,
+        premiumOnly: checklistForm.premiumOnly,
         items: checklistForm.items
           .map((item, index) => ({
             id: item.id,
@@ -839,6 +850,7 @@ export default function AdminDashboardApp() {
         status: safetyTipForm.status,
         language: safetyTipForm.language,
         featured: safetyTipForm.featured,
+        premiumOnly: safetyTipForm.premiumOnly,
         estimatedReadMinutes: Number(safetyTipForm.estimatedReadMinutes),
         coverImageUrl: safetyTipForm.coverImageUrl,
         thumbnailUrl: safetyTipForm.thumbnailUrl,
@@ -946,6 +958,7 @@ export default function AdminDashboardApp() {
           welcomeMessage: current.welcomeMessage,
           systemInstruction: current.systemInstruction,
           fallbackMessage: current.fallbackMessage,
+          suggestedQuestions: current.suggestedQuestions,
         },
       });
       setPromptForms((forms) => ({
@@ -1357,6 +1370,19 @@ export default function AdminDashboardApp() {
               onChange={(value) => updateActiveForm({ fallbackMessage: value })}
               rows={4}
             />
+            <TextAreaField
+              label="Suggested questions"
+              value={activeForm.suggestedQuestions.join("\n")}
+              onChange={(value) =>
+                updateActiveForm({
+                  suggestedQuestions: value
+                    .split("\n")
+                    .map((item) => item.trim())
+                    .filter(Boolean),
+                })
+              }
+              rows={4}
+            />
           </div>
         </div>
       </form>
@@ -1518,6 +1544,16 @@ export default function AdminDashboardApp() {
                     <span>{item.items.length} Items</span>
                     <span className="text-[#b8b1b4]">•</span>
                     <span>{languageLabel(item.language)}</span>
+                    <span
+                      className={classNames(
+                        "rounded-full px-2 py-0.5 text-xs font-semibold",
+                        item.premiumOnly
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-emerald-100 text-emerald-700"
+                      )}
+                    >
+                      {item.premiumOnly ? "Premium only" : "Free"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1614,6 +1650,16 @@ export default function AdminDashboardApp() {
                   <span>{languageLabel(item.language)}</span>
                   <span className="text-[#b8b1b4]">•</span>
                   <span>{formatDate(item.updatedAt)}</span>
+                  <span
+                    className={classNames(
+                      "rounded-full px-2 py-0.5 text-xs font-semibold",
+                      item.premiumOnly
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-emerald-100 text-emerald-700"
+                    )}
+                  >
+                    {item.premiumOnly ? "Premium only" : "Free"}
+                  </span>
                 </div>
               </div>
               <StatusBadge value={item.status} />
@@ -1830,9 +1876,9 @@ export default function AdminDashboardApp() {
       description: "Issue and manage premium access codes.",
     },
     appsettings: {
-      eyebrow: "Limits & rules",
-      title: "App settings",
-      description: "Tune free-tier limits, prompts, and access rules.",
+      eyebrow: "Premium permissions",
+      title: "Premium permissions",
+      description: "Define what free and premium users can access.",
     },
     ads: {
       eyebrow: "Monetization",
@@ -1905,7 +1951,7 @@ export default function AdminDashboardApp() {
               type="button"
               onClick={() => handleSectionChange(item.id)}
               className={classNames(
-                "flex w-full items-center gap-3 rounded-[8px] px-3 py-3 text-left text-sm font-medium transition",
+                "flex w-full cursor-pointer items-center gap-3 rounded-[8px] px-3 py-3 text-left text-sm font-medium transition",
                 active
                   ? "bg-[var(--danger)] text-white"
                   : "text-[#2b2526] hover:bg-[#faf4f4]"
@@ -1925,7 +1971,7 @@ export default function AdminDashboardApp() {
         <button
           type="button"
           onClick={openLogoutDialog}
-          className="flex items-center gap-2 text-sm font-medium text-[#2c2627] transition hover:text-[var(--danger)]"
+          className="flex cursor-pointer items-center gap-2 text-sm font-medium text-[#2c2627] transition hover:text-[var(--danger)]"
         >
           <AppIcon name="logout" className="h-4 w-4" />
           <span>Logout</span>
@@ -2289,6 +2335,20 @@ export default function AdminDashboardApp() {
                 ))}
               </select>
             </label>
+            <label className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm font-semibold text-[#201a1b]">
+              Premium only
+              <input
+                type="checkbox"
+                checked={checklistForm.premiumOnly}
+                onChange={(event) =>
+                  setChecklistForm((current) => ({
+                    ...current,
+                    premiumOnly: event.target.checked,
+                  }))
+                }
+                className="h-4 w-4 accent-[var(--danger)]"
+              />
+            </label>
 
             <div className="rounded-[24px] border border-[var(--border)] bg-[var(--panel-muted)] p-4">
               <p className="text-sm font-semibold text-[#201a1b]">Upload checklist media</p>
@@ -2603,6 +2663,20 @@ export default function AdminDashboardApp() {
                       setSafetyTipForm((current) => ({
                         ...current,
                         featured: event.target.checked,
+                      }))
+                    }
+                    className="h-4 w-4 accent-[var(--danger)]"
+                  />
+                </label>
+                <label className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm font-semibold text-[#201a1b]">
+                  Premium only
+                  <input
+                    type="checkbox"
+                    checked={safetyTipForm.premiumOnly}
+                    onChange={(event) =>
+                      setSafetyTipForm((current) => ({
+                        ...current,
+                        premiumOnly: event.target.checked,
                       }))
                     }
                     className="h-4 w-4 accent-[var(--danger)]"
