@@ -225,10 +225,10 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="text-[2rem] font-bold tracking-[-0.03em] text-[#221c1d]">
-            System settings
+            Premium permissions
           </h2>
           <p className="mt-1 text-sm text-[#6d6668]">
-            Tune free-tier limits, live tier prompts, access rules, and feature toggles
+            Configure what free and premium users can access across chat, guides, checklists, ads, and materials
           </p>
         </div>
         {settings?.updatedAt ? (
@@ -436,14 +436,14 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
               </p>
               <h3 className="mt-2 text-xl font-bold text-[#201a1b]">Access rules</h3>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Control what free users can reach before upgrading to premium.
+                These settings work with each guide/checklist Premium-only toggle.
               </p>
             </div>
             <div className="grid gap-5 lg:grid-cols-2">
               <div className="grid gap-3">
                 <label className={TOGGLE_ROW}>
                   <span className="flex flex-col gap-0.5">
-                    Premium checklists locked
+                    Premium-only checklists locked
                     <span className="text-xs font-normal text-[var(--muted)]">
                       Hide premium checklists from free users.
                     </span>
@@ -457,7 +457,7 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
                 </label>
                 <label className={TOGGLE_ROW}>
                   <span className="flex flex-col gap-0.5">
-                    Premium guides locked
+                    Premium-only guides locked
                     <span className="text-xs font-normal text-[var(--muted)]">
                       Hide premium guides from free users.
                     </span>
