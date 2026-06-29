@@ -74,7 +74,7 @@ type ConfirmState =
   | { kind: "revoke" }
   | null;
 
-const PAGE_LIMIT = 20;
+const PAGE_LIMIT = 10;
 
 const tierFilters: Array<{ value: TierFilter; label: string }> = [
   { value: "all", label: "All tiers" },
