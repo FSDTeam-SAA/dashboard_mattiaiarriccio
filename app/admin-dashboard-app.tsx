@@ -215,7 +215,7 @@ const navItems: Array<{ id: Section; label: string; eyebrow: string }> = [
   { id: "coupons", label: "Coupons", eyebrow: "Access codes" },
   { id: "appsettings", label: "Premium permissions", eyebrow: "Limits & rules" },
   { id: "ads", label: "Ads", eyebrow: "Monetization" },
-  { id: "emergency", label: "Emergency responses", eyebrow: "Override" },
+  { id: "emergency", label: "Smart playbooks", eyebrow: "Emergency AI" },
   { id: "materials", label: "Materials", eyebrow: "Oversight" },
   { id: "notifications", label: "Notifications", eyebrow: "Monitoring" },
 ];
@@ -1886,9 +1886,9 @@ export default function AdminDashboardApp() {
       description: "Configure ad placements and unit identifiers.",
     },
     emergency: {
-      eyebrow: "Override",
-      title: "Emergency responses",
-      description: "Manage emergency override response templates.",
+      eyebrow: "Emergency AI",
+      title: "Smart emergency playbooks",
+      description: "Manage approved emergency guidance and AI routing rules.",
     },
     materials: {
       eyebrow: "Oversight",
@@ -2066,7 +2066,7 @@ export default function AdminDashboardApp() {
   return (
     <main className="min-h-screen bg-[#fcf8f8] text-[#201a1b]">
       <div className="min-h-screen bg-white lg:flex">
-          <aside className="hidden min-h-screen w-[230px] border-r border-[#f1e9e9] bg-white lg:flex lg:flex-col">
+          <aside className="sticky top-0 hidden h-screen w-[230px] shrink-0 self-start overflow-y-auto border-r border-[#f1e9e9] bg-white lg:flex lg:flex-col">
             {sidebarContent}
           </aside>
 

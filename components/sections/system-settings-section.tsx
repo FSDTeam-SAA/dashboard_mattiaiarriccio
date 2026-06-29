@@ -308,9 +308,9 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
             <div className="grid gap-3">
               <label className={TOGGLE_ROW}>
                 <span className="flex flex-col gap-0.5">
-                  Emergency override
+                  Smart emergency routing
                   <span className="text-xs font-normal text-[var(--muted)]">
-                    Surface emergency responses ahead of normal chat.
+                    Let approved playbooks route chat before OpenAI when confidence is high.
                   </span>
                 </span>
                 <input
