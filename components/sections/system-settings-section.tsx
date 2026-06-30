@@ -7,7 +7,7 @@ import {
   type ApiErrorShape,
 } from "@/lib/api-client";
 import { classNames, formatDate } from "@/lib/format";
-import { AppIcon, Field, TextAreaField } from "@/components/ui/primitives";
+import { AppIcon, Field } from "@/components/ui/primitives";
 import type { SectionProps } from "@/components/sections/types";
 
 type AccessRules = {
@@ -19,8 +19,6 @@ type AccessRules = {
 type AppSettings = {
   freeDailyMessageLimit: number;
   freeDailyChatLimit: number;
-  freePrompt: string;
-  premiumPrompt: string;
   accessRules: AccessRules;
   emergencyOverrideEnabled: boolean;
   notificationsEnabled: boolean;
@@ -32,7 +30,7 @@ type AppSettings = {
   reminderDefaults?: unknown;
 };
 
-type SaveKey = "limits" | "prompts" | "access" | "toggles";
+type SaveKey = "limits" | "access" | "toggles";
 
 const PANEL_CARD =
   "rounded-[28px] border border-[var(--border)] bg-white p-5 shadow-[0_18px_40px_rgba(26,18,18,0.06)] sm:p-6";
@@ -57,10 +55,6 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
   const [freeDailyMessageLimit, setFreeDailyMessageLimit] = useState(0);
   const [freeDailyChatLimit, setFreeDailyChatLimit] = useState(0);
 
-  // Tier prompts
-  const [freePrompt, setFreePrompt] = useState("");
-  const [premiumPrompt, setPremiumPrompt] = useState("");
-
   // Access rules
   const [premiumChecklistsLocked, setPremiumChecklistsLocked] = useState(false);
   const [premiumGuidesLocked, setPremiumGuidesLocked] = useState(false);
@@ -75,8 +69,6 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
     setSettings(data);
     setFreeDailyMessageLimit(Number(data.freeDailyMessageLimit ?? 0));
     setFreeDailyChatLimit(Number(data.freeDailyChatLimit ?? 0));
-    setFreePrompt(data.freePrompt ?? "");
-    setPremiumPrompt(data.premiumPrompt ?? "");
     setPremiumChecklistsLocked(Boolean(accessRules.premiumChecklistsLocked));
     setPremiumGuidesLocked(Boolean(accessRules.premiumGuidesLocked));
     setMaxFreeMaterials(Number(accessRules.maxFreeMaterials ?? 0));
@@ -146,23 +138,6 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
     );
   };
 
-  const savePrompts = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!freePrompt.trim()) {
-      notify("error", "Free prompt cannot be empty.");
-      return;
-    }
-    if (!premiumPrompt.trim()) {
-      notify("error", "Premium prompt cannot be empty.");
-      return;
-    }
-    void patchSettings(
-      "prompts",
-      { freePrompt: freePrompt.trim(), premiumPrompt: premiumPrompt.trim() },
-      "Tier prompts updated."
-    );
-  };
-
   const saveAccessRules = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!Number.isInteger(maxFreeMaterials) || maxFreeMaterials < 0) {
@@ -199,7 +174,7 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
             Premium permissions
           </h2>
           <p className="mt-1 text-sm text-[#6d6668]">
-            Configure what free and premium users can access across chat, guides, checklists, ads, and materials
+            Configure limits, locked content, materials access, and platform toggles
           </p>
         </div>
         {settings?.updatedAt ? (
@@ -309,43 +284,6 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
             <div className="mt-6 flex justify-end">
               <button type="submit" disabled={savingKey === "toggles"} className={PRIMARY_BUTTON}>
                 {savingKey === "toggles" ? "Saving..." : "Save toggles"}
-              </button>
-            </div>
-          </form>
-
-          {/* Tier prompts */}
-          <form onSubmit={savePrompts} className={classNames(PANEL_CARD, "xl:col-span-2")}>
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
-                  Live AI configuration
-                </p>
-                <h3 className="mt-2 text-xl font-bold text-[#201a1b]">Tier prompts</h3>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  Changes apply live to the chat for free and premium users.
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-2 self-start rounded-full bg-[#fff3f3] px-3 py-1 text-xs font-semibold text-[var(--danger)]">
-                Changes apply live
-              </span>
-            </div>
-            <div className="grid gap-5 lg:grid-cols-2">
-              <TextAreaField
-                label="Free prompt"
-                value={freePrompt}
-                onChange={setFreePrompt}
-                rows={8}
-              />
-              <TextAreaField
-                label="Premium prompt"
-                value={premiumPrompt}
-                onChange={setPremiumPrompt}
-                rows={8}
-              />
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button type="submit" disabled={savingKey === "prompts"} className={PRIMARY_BUTTON}>
-                {savingKey === "prompts" ? "Saving..." : "Save prompts"}
               </button>
             </div>
           </form>

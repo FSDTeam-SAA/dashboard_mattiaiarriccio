@@ -91,6 +91,12 @@ type PromptFormBundle = {
   it: PromptForm;
 };
 
+type TierPromptSettings = {
+  freePrompt: string;
+  premiumPrompt: string;
+  updatedAt?: string;
+};
+
 type ActivityItem = {
   id: string;
   type: string;
@@ -291,6 +297,11 @@ const emptyPromptBundle = (): PromptFormBundle => ({
   it: emptyPromptForm("it"),
 });
 
+const emptyTierPromptSettings = (): TierPromptSettings => ({
+  freePrompt: "",
+  premiumPrompt: "",
+});
+
 const getSectionIconName = (section: Section) =>
   section === "dashboard"
     ? "dashboard"
@@ -345,6 +356,8 @@ export default function AdminDashboardApp() {
   const [promptForms, setPromptForms] = useState<PromptFormBundle>(
     emptyPromptBundle()
   );
+  const [tierPromptSettings, setTierPromptSettings] =
+    useState<TierPromptSettings>(emptyTierPromptSettings());
   const [promptLanguage, setPromptLanguage] = useState<PromptLanguage>("en");
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
   const [checklists, setChecklists] = useState<ChecklistRecord[]>([]);
@@ -397,6 +410,7 @@ export default function AdminDashboardApp() {
     setToken(null);
     setMobileNavOpen(false);
     setDashboard(null);
+    setTierPromptSettings(emptyTierPromptSettings());
     setCategories([]);
     setChecklists([]);
     setSafetyTips([]);
@@ -450,14 +464,16 @@ export default function AdminDashboardApp() {
       const [
         dashboardData,
         promptData,
+        appSettingsData,
         categoryData,
         checklistData,
         safetyTipData,
-        settingsData,
+        adminSettingsData,
         activityData,
       ] = await Promise.all([
         apiRequest<DashboardData>("/admin/dashboard", { token: currentToken }),
         apiRequest<PromptFormBundle>("/admin/ai-prompt", { token: currentToken }),
+        apiRequest<TierPromptSettings>("/admin/app-settings", { token: currentToken }),
         apiRequest<CategoryRecord[]>("/admin/categories", { token: currentToken }),
         apiRequest<ChecklistRecord[]>("/admin/checklists", { token: currentToken }),
         apiRequest<SafetyTipRecord[]>("/admin/safety-tips", { token: currentToken }),
@@ -470,10 +486,15 @@ export default function AdminDashboardApp() {
         en: { ...promptData.en, language: "en", suggestedQuestions: promptData.en.suggestedQuestions || [] },
         it: { ...promptData.it, language: "it", suggestedQuestions: promptData.it.suggestedQuestions || [] },
       });
+      setTierPromptSettings({
+        freePrompt: appSettingsData.freePrompt ?? "",
+        premiumPrompt: appSettingsData.premiumPrompt ?? "",
+        updatedAt: appSettingsData.updatedAt,
+      });
       setCategories(categoryData);
       setChecklists(checklistData);
       setSafetyTips(safetyTipData);
-      setAdminProfile(settingsData);
+      setAdminProfile(adminSettingsData);
       setActivity(activityData);
     } catch (error) {
       handleRequestError(error);
@@ -974,6 +995,44 @@ export default function AdminDashboardApp() {
     }
   };
 
+  const saveTierPrompts = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token) return;
+
+    const freePrompt = tierPromptSettings.freePrompt.trim();
+    const premiumPrompt = tierPromptSettings.premiumPrompt.trim();
+
+    if (!freePrompt) {
+      setToast({ kind: "error", message: "Free chatbot prompt cannot be empty." });
+      return;
+    }
+
+    if (!premiumPrompt) {
+      setToast({ kind: "error", message: "Premium chatbot prompt cannot be empty." });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const data = await apiRequest<TierPromptSettings>("/admin/app-settings", {
+        token,
+        method: "PATCH",
+        body: { freePrompt, premiumPrompt },
+      });
+      setTierPromptSettings({
+        freePrompt: data.freePrompt ?? freePrompt,
+        premiumPrompt: data.premiumPrompt ?? premiumPrompt,
+        updatedAt: data.updatedAt,
+      });
+      setToast({ kind: "success", message: "Free and Premium chatbot prompts updated." });
+    } catch (error) {
+      handleRequestError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const saveSettings = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token || !adminProfile) return;
@@ -1310,21 +1369,90 @@ export default function AdminDashboardApp() {
         ...forms,
         [promptLanguage]: { ...forms[promptLanguage], ...patch },
       }));
+    const updateTierPromptSettings = (patch: Partial<TierPromptSettings>) =>
+      setTierPromptSettings((settings) => ({ ...settings, ...patch }));
 
     return (
-      <form onSubmit={savePrompt} className="space-y-6">
-        <div className="rounded-[28px] border border-[var(--border)] bg-white p-4 shadow-[0_18px_40px_rgba(26,18,18,0.06)] sm:p-6">
+      <section className="space-y-7">
+        <form onSubmit={saveTierPrompts} className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
+                Tier response control
+              </p>
+              <h3 className="mt-2 text-xl font-bold text-[#201a1b]">
+                Free and Premium chatbot prompts
+              </h3>
+              <p className="mt-1 max-w-3xl text-xs leading-5 text-[var(--muted)]">
+                These prompts control the assistant&apos;s answer style by account tier.
+                Free should stay short and cost-optimized; Premium can be more detailed
+                and complete.
+              </p>
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-2xl bg-[var(--danger)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--danger-deep)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            >
+              {loading ? "Saving..." : "Save tier prompts"}
+            </button>
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className="rounded-[22px] border border-[var(--border)] bg-white p-4 shadow-[0_14px_34px_rgba(26,18,18,0.05)] sm:p-5">
+              <div className="mb-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--muted)]">
+                  Free version
+                </p>
+                <h4 className="mt-1 text-lg font-bold text-[#201a1b]">
+                  Free chatbot prompt
+                </h4>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Use this for shorter, practical responses that keep OpenAI usage controlled.
+                </p>
+              </div>
+              <TextAreaField
+                label="Free prompt"
+                value={tierPromptSettings.freePrompt}
+                onChange={(value) => updateTierPromptSettings({ freePrompt: value })}
+                rows={10}
+              />
+            </div>
+            <div className="rounded-[22px] border border-[var(--border)] bg-white p-4 shadow-[0_14px_34px_rgba(26,18,18,0.05)] sm:p-5">
+              <div className="mb-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--danger)]">
+                  Premium version
+                </p>
+                <h4 className="mt-1 text-lg font-bold text-[#201a1b]">
+                  Premium chatbot prompt
+                </h4>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                  Use this for richer answers with more complete steps and follow-up advice.
+                </p>
+              </div>
+              <TextAreaField
+                label="Premium prompt"
+                value={tierPromptSettings.premiumPrompt}
+                onChange={(value) => updateTierPromptSettings({ premiumPrompt: value })}
+                rows={10}
+              />
+            </div>
+          </div>
+        </form>
+
+        <form onSubmit={savePrompt} className="space-y-6">
+          <div className="rounded-[28px] border border-[var(--border)] bg-white p-4 shadow-[0_18px_40px_rgba(26,18,18,0.06)] sm:p-6">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
-                Live AI configuration
+                Language configuration
               </p>
               <h3 className="mt-2 text-xl font-bold text-[#201a1b]">
-                Chat bot modification
+                Language-specific prompt details
               </h3>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Each language has its own welcome, system instruction, and fallback. The chat uses the
-                prompt that matches the user&apos;s app language.
+                Each language has its own welcome, base instruction, fallback response,
+                and suggested questions. The tier prompts above still decide Free versus
+                Premium answer style.
               </p>
             </div>
             <button
@@ -1385,7 +1513,8 @@ export default function AdminDashboardApp() {
             />
           </div>
         </div>
-      </form>
+        </form>
+      </section>
     );
   };
 
@@ -1843,7 +1972,7 @@ export default function AdminDashboardApp() {
     prompt: {
       eyebrow: "Chat bot prompts",
       title: "Chat bot prompts",
-      description: "Update the live assistant prompt and sync changes to the AI service.",
+      description: "Control Free and Premium response styles plus language-specific chat copy.",
     },
     categories: {
       eyebrow: "Categories",
@@ -1878,7 +2007,7 @@ export default function AdminDashboardApp() {
     appsettings: {
       eyebrow: "Premium permissions",
       title: "Premium permissions",
-      description: "Define what free and premium users can access.",
+      description: "Define limits, gated content, materials access, and platform toggles.",
     },
     ads: {
       eyebrow: "Monetization",
