@@ -23,7 +23,12 @@ import {
 } from "@/components/ui/primitives";
 import type { SectionProps } from "@/components/sections/types";
 
-type NotificationStatus = "pending" | "sent" | "canceled" | "failed";
+type NotificationStatus =
+  | "pending"
+  | "sent"
+  | "skipped"
+  | "canceled"
+  | "failed";
 type NotificationType =
   | "material_expiry"
   | "inspection"
@@ -32,7 +37,7 @@ type NotificationType =
   | "custom";
 type HistoryChannel = "push" | "local" | "email";
 type SendChannel = "push" | "email";
-type AudienceType = "all" | "free" | "premium" | "category";
+type AudienceType = "all" | "free" | "premium" | "category" | "specific";
 type TabId = "compose" | "templates" | "history";
 
 type NotificationJob = {
@@ -47,6 +52,9 @@ type NotificationJob = {
   status: NotificationStatus;
   sentAt?: string | null;
   error?: string | null;
+  attempts?: number;
+  maxAttempts?: number;
+  campaignId?: string | null;
   createdAt: string;
 };
 
@@ -80,25 +88,19 @@ type NotificationFormState = {
   channels: SendChannel[];
   audienceType: AudienceType;
   categorySlug: string;
+  // Whitespace/comma separated user ids, used only for the "specific" audience.
+  userIds: string;
 };
 
-type SendSummary = {
+type SendResult = {
+  campaignId: string;
   recipients: number;
   channels: SendChannel[];
   audience: {
     type: AudienceType;
     categorySlug: string;
   };
-  push: {
-    sent: number;
-    skipped: number;
-    failed: number;
-  };
-  email: {
-    sent: number;
-    skipped: number;
-    failed: number;
-  };
+  queued: number;
 };
 
 const PAGE_LIMIT = 20;
@@ -107,6 +109,7 @@ const STATUS_OPTIONS: Array<{ value: "" | NotificationStatus; label: string }> =
   { value: "", label: "All statuses" },
   { value: "pending", label: "Pending" },
   { value: "sent", label: "Sent" },
+  { value: "skipped", label: "Skipped" },
   { value: "canceled", label: "Canceled" },
   { value: "failed", label: "Failed" },
 ];
@@ -121,6 +124,7 @@ const CHANNEL_FILTER_OPTIONS: Array<{ value: "" | HistoryChannel; label: string 
 const STATUS_TONE: Record<NotificationStatus, string> = {
   pending: "bg-amber-100 text-amber-700",
   sent: "bg-emerald-100 text-emerald-700",
+  skipped: "bg-slate-100 text-slate-600",
   canceled: "bg-slate-100 text-slate-600",
   failed: "bg-[var(--danger-soft)] text-[var(--danger)]",
 };
@@ -138,6 +142,7 @@ const AUDIENCE_LABEL: Record<AudienceType, string> = {
   free: "Free users",
   premium: "Premium users",
   category: "Category users",
+  specific: "Specific users",
 };
 
 const emptyForm = (): NotificationFormState => ({
@@ -148,7 +153,27 @@ const emptyForm = (): NotificationFormState => ({
   channels: ["push"],
   audienceType: "all",
   categorySlug: "",
+  userIds: "",
 });
+
+// A unique key per compose-and-send intent. The backend dedupes repeated sends
+// (double click / retry) that carry the same key, so it is regenerated only
+// after a successful send or an explicit Clear.
+const genCampaignKey = (): string =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `campaign_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+// Split a free-text list of user ids on commas/whitespace/newlines.
+const parseUserIds = (raw: string): string[] =>
+  Array.from(
+    new Set(
+      raw
+        .split(/[\s,]+/)
+        .map((id) => id.trim())
+        .filter(Boolean)
+    )
+  );
 
 function NotificationStatusBadge({ value }: { value: string }) {
   const tone =
@@ -212,6 +237,7 @@ export function NotificationsSection({ token, notify }: SectionProps) {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [campaignKey, setCampaignKey] = useState<string>(genCampaignKey);
 
   const loadJobs = useCallback(async () => {
     if (!token) return;
@@ -343,6 +369,7 @@ export function NotificationsSection({ token, notify }: SectionProps) {
       channels: template.channels.length ? template.channels : ["push"],
       audienceType: template.audienceType,
       categorySlug: template.categorySlug || "",
+      userIds: "",
     });
     setActiveTab("compose");
   };
@@ -358,6 +385,7 @@ export function NotificationsSection({ token, notify }: SectionProps) {
         channels: template.channels.length ? template.channels : ["push"],
         audienceType: template.audienceType,
         categorySlug: template.categorySlug || "",
+        userIds: "",
       });
     } else {
       setEditingTemplateId(null);
@@ -368,6 +396,7 @@ export function NotificationsSection({ token, notify }: SectionProps) {
 
   const resetCompose = () => {
     setComposeForm(emptyForm());
+    setCampaignKey(genCampaignKey());
   };
 
   const validateForm = (form: NotificationFormState, includeName: boolean) => {
@@ -387,6 +416,10 @@ export function NotificationsSection({ token, notify }: SectionProps) {
       notify("error", "Choose a category for this audience.");
       return false;
     }
+    if (form.audienceType === "specific" && parseUserIds(form.userIds).length === 0) {
+      notify("error", "Enter at least one user ID.");
+      return false;
+    }
     return true;
   };
 
@@ -396,29 +429,53 @@ export function NotificationsSection({ token, notify }: SectionProps) {
 
     setSending(true);
     try {
-      const summary = await apiRequest<SendSummary>("/admin/notifications/send", {
+      const result = await apiRequest<SendResult>("/admin/notifications/send", {
         token,
         method: "POST",
         body: {
+          idempotencyKey: campaignKey,
           templateId: composeForm.templateId || undefined,
           title: composeForm.title,
           body: composeForm.body,
           channels: composeForm.channels,
           audienceType: composeForm.audienceType,
           categorySlug: composeForm.categorySlug,
+          userIds:
+            composeForm.audienceType === "specific"
+              ? parseUserIds(composeForm.userIds)
+              : undefined,
         },
       });
 
       notify(
         "success",
-        `Matched ${summary.recipients} users. Push ${summary.push.sent} sent, email ${summary.email.sent} sent.`
+        result.recipients === 0
+          ? "No users matched this audience."
+          : `Queued ${result.queued} notification(s) for ${result.recipients} user(s).`
       );
+      // New key so the next send is treated as a distinct campaign.
+      setCampaignKey(genCampaignKey());
       void loadJobs();
     } catch (err) {
       const e = err as ApiErrorShape;
       notify("error", e.message || "Unable to send notification");
     } finally {
       setSending(false);
+    }
+  };
+
+  const retryJob = async (job: NotificationJob) => {
+    if (!token) return;
+    try {
+      await apiRequest(`/admin/notifications/${job.id}/retry`, {
+        token,
+        method: "POST",
+      });
+      notify("success", "Notification re-queued for delivery.");
+      void loadJobs();
+    } catch (err) {
+      const e = err as ApiErrorShape;
+      notify("error", e.message || "Unable to retry notification");
     }
   };
 
@@ -517,10 +574,17 @@ export function NotificationsSection({ token, notify }: SectionProps) {
   const renderAudienceControls = (
     target: "compose" | "template",
     form: NotificationFormState
-  ) => (
+  ) => {
+    // "specific" targets an explicit user list — only for one-off sends, never
+    // saved as a reusable template.
+    const options: AudienceType[] =
+      target === "compose"
+        ? ["all", "free", "premium", "category", "specific"]
+        : ["all", "free", "premium", "category"];
+    return (
     <div className="grid gap-3">
-      <div className="grid gap-2 sm:grid-cols-4">
-        {(["all", "free", "premium", "category"] as AudienceType[]).map((value) => (
+      <div className="grid gap-2 sm:grid-cols-3">
+        {options.map((value) => (
           <button
             key={value}
             type="button"
@@ -536,6 +600,26 @@ export function NotificationsSection({ token, notify }: SectionProps) {
           </button>
         ))}
       </div>
+      {form.audienceType === "specific" ? (
+        <label className="flex flex-col gap-2">
+          <span className="text-sm font-semibold text-[#33292b]">User IDs</span>
+          <textarea
+            value={form.userIds}
+            onChange={(event) =>
+              updateForm(target, (current) => ({
+                ...current,
+                userIds: event.target.value,
+              }))
+            }
+            rows={3}
+            placeholder="user_abc, user_def"
+            className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
+          />
+          <span className="text-xs font-medium text-[#8b8286]">
+            Paste user IDs separated by commas or spaces.
+          </span>
+        </label>
+      ) : null}
       {form.audienceType === "category" ? (
         <label className="flex flex-col gap-2">
           <span className="text-sm font-semibold text-[#33292b]">Category</span>
@@ -561,7 +645,8 @@ export function NotificationsSection({ token, notify }: SectionProps) {
         </label>
       ) : null}
     </div>
-  );
+    );
+  };
 
   const renderComposeTab = () => (
     <form
@@ -609,6 +694,12 @@ export function NotificationsSection({ token, notify }: SectionProps) {
             }
             rows={6}
           />
+          <p className="-mt-2 text-xs font-medium text-[#8b8286]">
+            Variables:{" "}
+            <code>{"{{name}}"}</code> <code>{"{{email}}"}</code>{" "}
+            <code>{"{{expiryDate}}"}</code> <code>{"{{daysRemaining}}"}</code>{" "}
+            <code>{"{{planName}}"}</code> — replaced per recipient.
+          </p>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-[12px] border border-[#ece4e4] bg-white p-4">
@@ -794,7 +885,7 @@ export function NotificationsSection({ token, notify }: SectionProps) {
         </div>
         {loadedJobs && jobs.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#6d6668]">
-            {(["pending", "sent", "canceled", "failed"] as NotificationStatus[])
+            {(["pending", "sent", "skipped", "canceled", "failed"] as NotificationStatus[])
               .filter((status) => statusCounts[status])
               .map((status) => (
                 <span
@@ -843,6 +934,13 @@ export function NotificationsSection({ token, notify }: SectionProps) {
                   <span className="text-[#9b9296]">User:</span>{" "}
                   {job.userId || "-"}
                 </span>
+                {job.attempts ? (
+                  <span>
+                    <span className="text-[#9b9296]">Attempts:</span>{" "}
+                    {job.attempts}
+                    {job.maxAttempts ? `/${job.maxAttempts}` : ""}
+                  </span>
+                ) : null}
               </div>
               {job.error ? (
                 <p className="mt-2 rounded-lg border border-[var(--danger-soft)] bg-[var(--danger-soft)] px-3 py-2 text-xs font-medium text-[var(--danger-deep)]">
@@ -850,6 +948,17 @@ export function NotificationsSection({ token, notify }: SectionProps) {
                 </p>
               ) : null}
             </div>
+            {job.status === "failed" ? (
+              <div className="flex items-start md:justify-end">
+                <button
+                  type="button"
+                  onClick={() => void retryJob(job)}
+                  className="rounded-full border border-[var(--danger)] bg-white px-4 py-2 text-sm font-semibold text-[var(--danger)] transition hover:bg-[var(--danger-soft)]"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
           </div>
         ))}
 
