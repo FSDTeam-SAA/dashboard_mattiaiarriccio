@@ -222,7 +222,7 @@ const navItems: Array<{ id: Section; label: string; eyebrow: string }> = [
   { id: "appsettings", label: "Premium permissions", eyebrow: "Limits & rules" },
   { id: "ads", label: "Ads", eyebrow: "Monetization" },
   { id: "materials", label: "Materials", eyebrow: "Oversight" },
-  { id: "notifications", label: "Notifications", eyebrow: "Monitoring" },
+  { id: "notifications", label: "Notifications", eyebrow: "Broadcasts" },
   { id: "settings", label: "Settings", eyebrow: "Profile" },
 ];
 
@@ -2025,9 +2025,9 @@ export default function AdminDashboardApp() {
       description: "Monitor user materials and expirations.",
     },
     notifications: {
-      eyebrow: "Monitoring",
+      eyebrow: "Broadcasts",
       title: "Notifications",
-      description: "Monitor scheduled and delivered notifications.",
+      description: "Create templates and send push or email notifications.",
     },
   };
 

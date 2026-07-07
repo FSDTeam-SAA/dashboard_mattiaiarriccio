@@ -7,7 +7,7 @@ import {
   type ApiErrorShape,
 } from "@/lib/api-client";
 import { classNames, formatDate } from "@/lib/format";
-import { AppIcon, Field } from "@/components/ui/primitives";
+import { AppIcon, Field, TextAreaField } from "@/components/ui/primitives";
 import type { SectionProps } from "@/components/sections/types";
 
 type AccessRules = {
@@ -24,6 +24,8 @@ type ChatWelcomeMessage = {
 type AppSettings = {
   freeDailyMessageLimit: number;
   freeDailyChatLimit: number;
+  freePrompt: string;
+  premiumPrompt: string;
   accessRules: AccessRules;
   emergencyOverrideEnabled: boolean;
   notificationsEnabled: boolean;
@@ -61,6 +63,10 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
   const [freeDailyMessageLimit, setFreeDailyMessageLimit] = useState(0);
   const [freeDailyChatLimit, setFreeDailyChatLimit] = useState(0);
 
+  // Tier prompts
+  const [freePrompt, setFreePrompt] = useState("");
+  const [premiumPrompt, setPremiumPrompt] = useState("");
+
   // Access rules
   const [premiumChecklistsLocked, setPremiumChecklistsLocked] = useState(false);
   const [premiumGuidesLocked, setPremiumGuidesLocked] = useState(false);
@@ -79,6 +85,8 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
     setSettings(data);
     setFreeDailyMessageLimit(Number(data.freeDailyMessageLimit ?? 0));
     setFreeDailyChatLimit(Number(data.freeDailyChatLimit ?? 0));
+    setFreePrompt(data.freePrompt ?? "");
+    setPremiumPrompt(data.premiumPrompt ?? "");
     setPremiumChecklistsLocked(Boolean(accessRules.premiumChecklistsLocked));
     setPremiumGuidesLocked(Boolean(accessRules.premiumGuidesLocked));
     setMaxFreeMaterials(Number(accessRules.maxFreeMaterials ?? 0));
@@ -175,6 +183,26 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
       "toggles",
       { emergencyOverrideEnabled, notificationsEnabled },
       "Feature toggles updated."
+    );
+  };
+
+  const savePrompts = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!freePrompt.trim()) {
+      notify("error", "Free prompt cannot be empty.");
+      return;
+    }
+    if (!premiumPrompt.trim()) {
+      notify("error", "Premium prompt cannot be empty.");
+      return;
+    }
+    void patchSettings(
+      "prompts",
+      {
+        freePrompt: freePrompt.trim(),
+        premiumPrompt: premiumPrompt.trim(),
+      },
+      "Tier prompts updated."
     );
   };
 
