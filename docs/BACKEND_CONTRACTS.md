@@ -31,16 +31,17 @@ drops meta — for paginated admin lists, use a small local `fetchWithMeta` that
 - `DELETE /admin/coupons/:couponId` → `{ }` (cascades redemptions)
 - premium_grant `durationDays:null` = lifetime. trial is always time-boxed (null defaults to 7 at redeem).
 
-## System Settings (limits / prompts / access rules)  (SystemSettingsSection)
+## System Settings (limits / tier prompts / access rules)
 - `GET /admin/app-settings` → `data` = full config object:
   `{ freeDailyMessageLimit:int, freeDailyChatLimit:int, freePrompt:string, premiumPrompt:string,
      accessRules:{ premiumChecklistsLocked:bool, premiumGuidesLocked:bool, maxFreeMaterials:int },
      adsEnabled, adConfig, admUnitIds, emergencyOverrideEnabled:bool, reminderDefaults:{offsetDays:int[],channel}, notificationsEnabled:bool }`
 - `PATCH /admin/app-settings` `{ <any subset of the keys above> }` → returns the full updated config.
-  Validation is server-side (e.g. limits must be int>=0; freePrompt/premiumPrompt non-empty). The Settings
-  section should edit: freeDailyMessageLimit, freeDailyChatLimit, freePrompt, premiumPrompt, accessRules,
-  emergencyOverrideEnabled, notificationsEnabled. (Ad config is a SEPARATE section, see below. The existing
-  per-language AI welcome/system/fallback prompts remain in the existing "Chat bot prompts" section.)
+  Validation is server-side (e.g. limits must be int>=0; freePrompt/premiumPrompt non-empty).
+- The "Chat bot prompts" section edits `freePrompt` and `premiumPrompt` so tier-specific response controls
+  are visible next to the per-language AI welcome/system/fallback prompts.
+- The "Premium permissions" section edits only `freeDailyMessageLimit`, `freeDailyChatLimit`, `accessRules`,
+  `emergencyOverrideEnabled`, and `notificationsEnabled`. Ad config is a SEPARATE section, see below.
 
 ## Ads  (AdsSection)
 - `GET /admin/settings/ad-config` → `data: { adsEnabled:bool, adConfig:{ format:'banner'|'native'|'banner+native', placements:string[], nativeFrequency:int>=1 }, admUnitIds:{ android:{banner,native}, ios:{banner,native} } }`
