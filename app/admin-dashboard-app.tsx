@@ -128,7 +128,17 @@ type ChecklistRecord = {
   coverImageUrl: string;
   status: string;
   premiumOnly: boolean;
-  items: Array<{ id: string; text: string; order: number; icon: string }>;
+  items: Array<{
+    id: string;
+    text: string;
+    order: number;
+    icon: string;
+    description: string;
+    imageUrl: string;
+    expirationDate: string | null;
+    inspectionDate: string | null;
+    inspectionIntervalMonths: number | null;
+  }>;
   updatedAt: string;
 };
 
@@ -181,7 +191,18 @@ type ChecklistFormState = {
   icon: string;
   coverImageUrl: string;
   premiumOnly: boolean;
-  items: Array<{ id: string; text: string; icon: string }>;
+  items: Array<{
+    id: string;
+    text: string;
+    icon: string;
+    description: string;
+    imageUrl: string;
+    // Date inputs use 'YYYY-MM-DD' strings ('' = unset).
+    expirationDate: string;
+    inspectionDate: string;
+    // Number input stored as a string ('' = unset).
+    inspectionIntervalMonths: string;
+  }>;
 };
 
 type CategoryFormState = {
@@ -234,6 +255,26 @@ const languageOptions = [
 const languageLabel = (value: string) =>
   languageOptions.find((option) => option.value === value)?.label || "English";
 
+const emptyChecklistItem = (): ChecklistFormState["items"][number] => ({
+  id: uid(),
+  text: "",
+  icon: "",
+  description: "",
+  imageUrl: "",
+  expirationDate: "",
+  inspectionDate: "",
+  inspectionIntervalMonths: "",
+});
+
+// Converts an ISO date string from the API to the 'YYYY-MM-DD' value an
+// <input type="date"> expects (empty when unset/invalid).
+const toDateInputValue = (iso: string | null | undefined): string => {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+};
+
 const emptyChecklistForm = (defaultCategorySlug = ""): ChecklistFormState => ({
   title: "",
   categorySlug: defaultCategorySlug,
@@ -244,7 +285,7 @@ const emptyChecklistForm = (defaultCategorySlug = ""): ChecklistFormState => ({
   icon: "",
   coverImageUrl: "",
   premiumOnly: false,
-  items: [{ id: uid(), text: "", icon: "" }],
+  items: [emptyChecklistItem()],
 });
 
 const ALLOWED_IMAGE_MIME_PREFIX = "image/";
@@ -697,6 +738,14 @@ export default function AdminDashboardApp() {
           id: item.id,
           text: item.text,
           icon: item.icon || "",
+          description: item.description || "",
+          imageUrl: item.imageUrl || "",
+          expirationDate: toDateInputValue(item.expirationDate),
+          inspectionDate: toDateInputValue(item.inspectionDate),
+          inspectionIntervalMonths:
+            item.inspectionIntervalMonths != null
+              ? String(item.inspectionIntervalMonths)
+              : "",
         })),
       });
     } else {
@@ -816,6 +865,13 @@ export default function AdminDashboardApp() {
             text: item.text,
             order: index + 1,
             icon: item.icon || "",
+            description: item.description || "",
+            imageUrl: item.imageUrl || "",
+            expirationDate: item.expirationDate ? item.expirationDate : null,
+            inspectionDate: item.inspectionDate ? item.inspectionDate : null,
+            inspectionIntervalMonths: item.inspectionIntervalMonths
+              ? Number(item.inspectionIntervalMonths)
+              : null,
           }))
           .filter((item) => (item.text as string).trim()),
       };
@@ -1112,6 +1168,47 @@ export default function AdminDashboardApp() {
         setSafetyTipForm((current) => ({ ...current, [field]: secureUrl }));
         setToast({ kind: "success", message: "Media uploaded successfully." });
       }
+    } catch (error) {
+      handleRequestError(error);
+    } finally {
+      event.target.value = "";
+      setLoading(false);
+    }
+  };
+
+  // Patches a single checklist item in the form by id.
+  const updateChecklistItem = (
+    itemId: string,
+    patch: Partial<ChecklistFormState["items"][number]>
+  ) => {
+    setChecklistForm((current) => ({
+      ...current,
+      items: current.items.map((currentItem) =>
+        currentItem.id === itemId ? { ...currentItem, ...patch } : currentItem
+      ),
+    }));
+  };
+
+  // Uploads a per-item image and stores its URL on that item.
+  const handleChecklistItemImageUpload = async (
+    event: ChangeEvent<HTMLInputElement>,
+    itemId: string
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file || !token) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      event.target.value = "";
+      setToast({ kind: "error", message: validationError });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const secureUrl = await uploadAsset(file, "checklist-items", token);
+      updateChecklistItem(itemId, { imageUrl: secureUrl });
+      setToast({ kind: "success", message: "Item image uploaded." });
     } catch (error) {
       handleRequestError(error);
     } finally {
@@ -2594,10 +2691,7 @@ export default function AdminDashboardApp() {
                 onClick={() =>
                   setChecklistForm((current) => ({
                     ...current,
-                    items: [
-                      ...current.items,
-                      { id: uid(), text: "", icon: "" },
-                    ],
+                    items: [...current.items, emptyChecklistItem()],
                   }))
                 }
                 className="rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
@@ -2609,57 +2703,148 @@ export default function AdminDashboardApp() {
               {checklistForm.items.map((item, index) => (
                 <div
                   key={item.id}
-                  className="flex flex-col gap-3 rounded-[22px] border border-[var(--border)] bg-white p-4 md:flex-row md:items-center"
+                  className="flex flex-col gap-3 rounded-[22px] border border-[var(--border)] bg-white p-4"
                 >
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[var(--danger-soft)] text-sm font-bold text-[var(--danger)]">
-                    {index + 1}
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[var(--danger-soft)] text-sm font-bold text-[var(--danger)]">
+                      {index + 1}
+                    </div>
+                    <input
+                      value={item.icon}
+                      onChange={(event) =>
+                        updateChecklistItem(item.id, { icon: event.target.value })
+                      }
+                      placeholder="🛟"
+                      aria-label="Icon emoji fallback"
+                      className="w-full rounded-2xl border border-[var(--border)] bg-white px-3 py-3 text-center text-base outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)] md:w-16"
+                    />
+                    <input
+                      value={item.text}
+                      onChange={(event) =>
+                        updateChecklistItem(item.id, { text: event.target.value })
+                      }
+                      placeholder="Describe the checklist action"
+                      className="min-w-0 flex-1 rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setChecklistForm((current) => ({
+                          ...current,
+                          items:
+                            current.items.length === 1
+                              ? current.items
+                              : current.items.filter(
+                                  (currentItem) => currentItem.id !== item.id
+                                ),
+                        }))
+                      }
+                      className="rounded-full border border-[var(--danger-soft)] px-4 py-2 text-sm font-semibold text-[var(--danger)]"
+                    >
+                      Remove
+                    </button>
                   </div>
-                  <input
-                    value={item.icon}
+
+                  <textarea
+                    value={item.description}
                     onChange={(event) =>
-                      setChecklistForm((current) => ({
-                        ...current,
-                        items: current.items.map((currentItem) =>
-                          currentItem.id === item.id
-                            ? { ...currentItem, icon: event.target.value }
-                            : currentItem
-                        ),
-                      }))
+                      updateChecklistItem(item.id, {
+                        description: event.target.value,
+                      })
                     }
-                    placeholder="🛟"
-                    aria-label="Icon emoji fallback"
-                    className="w-full rounded-2xl border border-[var(--border)] bg-white px-3 py-3 text-center text-base outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)] md:w-16"
+                    placeholder="Optional description / instructions for this item"
+                    rows={2}
+                    className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
                   />
-                  <input
-                    value={item.text}
-                    onChange={(event) =>
-                      setChecklistForm((current) => ({
-                        ...current,
-                        items: current.items.map((currentItem) =>
-                          currentItem.id === item.id
-                            ? { ...currentItem, text: event.target.value }
-                            : currentItem
-                        ),
-                      }))
-                    }
-                    placeholder="Describe the checklist action"
-                    className="min-w-0 flex-1 rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setChecklistForm((current) => ({
-                        ...current,
-                        items:
-                          current.items.length === 1
-                            ? current.items
-                            : current.items.filter((currentItem) => currentItem.id !== item.id),
-                      }))
-                    }
-                    className="rounded-full border border-[var(--danger-soft)] px-4 py-2 text-sm font-semibold text-[var(--danger)]"
-                  >
-                    Remove
-                  </button>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="flex items-center gap-3">
+                      {item.imageUrl ? (
+                        <div
+                          className="h-16 w-16 shrink-0 rounded-2xl bg-cover bg-center"
+                          style={{ backgroundImage: `url(${item.imageUrl})` }}
+                        />
+                      ) : (
+                        <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border border-dashed border-[var(--border)] text-center text-[10px] text-[var(--muted)]">
+                          No image
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-2">
+                        <label className="cursor-pointer rounded-full border border-[var(--border)] bg-white px-4 py-2 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]">
+                          {item.imageUrl ? "Replace image" : "Upload image"}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(event) =>
+                              void handleChecklistItemImageUpload(event, item.id)
+                            }
+                          />
+                        </label>
+                        {item.imageUrl ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateChecklistItem(item.id, { imageUrl: "" })
+                            }
+                            className="text-left text-xs font-semibold text-[var(--danger)]"
+                          >
+                            Remove image
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold text-[var(--muted)]">
+                          Expiration
+                        </span>
+                        <input
+                          type="date"
+                          value={item.expirationDate}
+                          onChange={(event) =>
+                            updateChecklistItem(item.id, {
+                              expirationDate: event.target.value,
+                            })
+                          }
+                          className="rounded-2xl border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold text-[var(--muted)]">
+                          Inspection
+                        </span>
+                        <input
+                          type="date"
+                          value={item.inspectionDate}
+                          onChange={(event) =>
+                            updateChecklistItem(item.id, {
+                              inspectionDate: event.target.value,
+                            })
+                          }
+                          className="rounded-2xl border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
+                        />
+                      </label>
+                      <label className="col-span-2 flex flex-col gap-1 sm:col-span-1">
+                        <span className="text-xs font-semibold text-[var(--muted)]">
+                          Every (months)
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={item.inspectionIntervalMonths}
+                          onChange={(event) =>
+                            updateChecklistItem(item.id, {
+                              inspectionIntervalMonths: event.target.value,
+                            })
+                          }
+                          placeholder="e.g. 6"
+                          className="rounded-2xl border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--danger)] focus:ring-2 focus:ring-[rgba(216,43,43,0.15)]"
+                        />
+                      </label>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

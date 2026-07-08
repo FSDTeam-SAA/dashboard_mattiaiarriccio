@@ -21,6 +21,24 @@ type ChatWelcomeMessage = {
   it: string;
 };
 
+type PaywallLang = {
+  headline: string;
+  subheadline: string;
+  limitReachedNote: string;
+  benefits: string[];
+  monthlyLabel: string;
+  yearlyLabel: string;
+  yearlyBadge: string;
+  ctaLabel: string;
+  restoreLabel: string;
+  footnote: string;
+};
+
+type PaywallContent = {
+  en: PaywallLang;
+  it: PaywallLang;
+};
+
 type AppSettings = {
   freeDailyMessageLimit: number;
   freeDailyChatLimit: number;
@@ -30,6 +48,7 @@ type AppSettings = {
   emergencyOverrideEnabled: boolean;
   notificationsEnabled: boolean;
   chatWelcomeMessage?: ChatWelcomeMessage;
+  paywallContent?: PaywallContent;
   // optional / not edited here
   updatedAt?: string;
   adsEnabled?: boolean;
@@ -38,7 +57,49 @@ type AppSettings = {
   reminderDefaults?: unknown;
 };
 
-type SaveKey = "limits" | "prompts" | "access" | "toggles" | "welcome";
+type SaveKey =
+  | "limits"
+  | "prompts"
+  | "access"
+  | "toggles"
+  | "welcome"
+  | "paywall";
+
+const EMPTY_PAYWALL_LANG: PaywallLang = {
+  headline: "",
+  subheadline: "",
+  limitReachedNote: "",
+  benefits: [],
+  monthlyLabel: "",
+  yearlyLabel: "",
+  yearlyBadge: "",
+  ctaLabel: "",
+  restoreLabel: "",
+  footnote: "",
+};
+
+const normalizePaywallLang = (
+  value?: Partial<PaywallLang>
+): PaywallLang => ({
+  ...EMPTY_PAYWALL_LANG,
+  ...(value ?? {}),
+  benefits: Array.isArray(value?.benefits)
+    ? value!.benefits.map((b) => String(b))
+    : [],
+});
+
+const cleanPaywallLang = (value: PaywallLang): PaywallLang => ({
+  headline: value.headline.trim(),
+  subheadline: value.subheadline.trim(),
+  limitReachedNote: value.limitReachedNote.trim(),
+  benefits: value.benefits.map((b) => b.trim()).filter(Boolean),
+  monthlyLabel: value.monthlyLabel.trim(),
+  yearlyLabel: value.yearlyLabel.trim(),
+  yearlyBadge: value.yearlyBadge.trim(),
+  ctaLabel: value.ctaLabel.trim(),
+  restoreLabel: value.restoreLabel.trim(),
+  footnote: value.footnote.trim(),
+});
 
 const PANEL_CARD =
   "rounded-[28px] border border-[var(--border)] bg-white p-5 shadow-[0_18px_40px_rgba(26,18,18,0.06)] sm:p-6";
@@ -80,6 +141,10 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
   const [welcomeEn, setWelcomeEn] = useState("");
   const [welcomeIt, setWelcomeIt] = useState("");
 
+  // Paywall / Premium screen copy
+  const [paywallEn, setPaywallEn] = useState<PaywallLang>(EMPTY_PAYWALL_LANG);
+  const [paywallIt, setPaywallIt] = useState<PaywallLang>(EMPTY_PAYWALL_LANG);
+
   const hydrate = useCallback((data: AppSettings) => {
     const accessRules = data.accessRules ?? DEFAULT_ACCESS_RULES;
     setSettings(data);
@@ -94,6 +159,8 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
     setNotificationsEnabled(Boolean(data.notificationsEnabled));
     setWelcomeEn(data.chatWelcomeMessage?.en ?? "");
     setWelcomeIt(data.chatWelcomeMessage?.it ?? "");
+    setPaywallEn(normalizePaywallLang(data.paywallContent?.en));
+    setPaywallIt(normalizePaywallLang(data.paywallContent?.it));
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -222,6 +289,96 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
       "Welcome message updated."
     );
   };
+
+  const savePaywall = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!paywallEn.headline.trim() || !paywallIt.headline.trim()) {
+      notify("error", "Paywall headline cannot be empty (EN and IT).");
+      return;
+    }
+    void patchSettings(
+      "paywall",
+      {
+        paywallContent: {
+          en: cleanPaywallLang(paywallEn),
+          it: cleanPaywallLang(paywallIt),
+        },
+      },
+      "Paywall content updated."
+    );
+  };
+
+  const renderPaywallLang = (
+    flag: string,
+    value: PaywallLang,
+    setValue: (updater: (prev: PaywallLang) => PaywallLang) => void
+  ) => (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm font-semibold text-[#201a1b]">{flag}</p>
+      <Field
+        label="Headline"
+        value={value.headline}
+        onChange={(v) => setValue((p) => ({ ...p, headline: v }))}
+        placeholder="Unlock WeSafe Premium"
+      />
+      <TextAreaField
+        label="Subheadline"
+        value={value.subheadline}
+        onChange={(v) => setValue((p) => ({ ...p, subheadline: v }))}
+        rows={2}
+      />
+      <Field
+        label="Limit note (use {limit} for the daily number)"
+        value={value.limitReachedNote}
+        onChange={(v) => setValue((p) => ({ ...p, limitReachedNote: v }))}
+        placeholder="Free plan: {limit} messages per day."
+      />
+      <TextAreaField
+        label="Benefits (one per line)"
+        value={value.benefits.join("\n")}
+        onChange={(v) =>
+          setValue((p) => ({ ...p, benefits: v.split("\n") }))
+        }
+        rows={4}
+      />
+      <div className="grid grid-cols-2 gap-3">
+        <Field
+          label="Monthly label"
+          value={value.monthlyLabel}
+          onChange={(v) => setValue((p) => ({ ...p, monthlyLabel: v }))}
+        />
+        <Field
+          label="Yearly label"
+          value={value.yearlyLabel}
+          onChange={(v) => setValue((p) => ({ ...p, yearlyLabel: v }))}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field
+          label="Yearly badge"
+          value={value.yearlyBadge}
+          onChange={(v) => setValue((p) => ({ ...p, yearlyBadge: v }))}
+        />
+        <Field
+          label="CTA button"
+          value={value.ctaLabel}
+          onChange={(v) => setValue((p) => ({ ...p, ctaLabel: v }))}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field
+          label="Restore label"
+          value={value.restoreLabel}
+          onChange={(v) => setValue((p) => ({ ...p, restoreLabel: v }))}
+        />
+        <Field
+          label="Footnote"
+          value={value.footnote}
+          onChange={(v) => setValue((p) => ({ ...p, footnote: v }))}
+        />
+      </div>
+    </div>
+  );
 
   return (
     <section className="space-y-5">
@@ -427,6 +584,43 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
             <div className="mt-6 flex justify-end">
               <button type="submit" disabled={savingKey === "welcome"} className={PRIMARY_BUTTON}>
                 {savingKey === "welcome" ? "Saving..." : "Save welcome message"}
+              </button>
+            </div>
+          </form>
+
+          {/* Paywall / Premium screen */}
+          <form
+            onSubmit={savePaywall}
+            className={classNames(PANEL_CARD, "xl:col-span-2")}
+          >
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
+                  Monetization
+                </p>
+                <h3 className="mt-2 text-xl font-bold text-[#201a1b]">
+                  Paywall screen
+                </h3>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  All text on the Premium / daily-limit screen. Use{" "}
+                  {"{limit}"} in the limit note to insert the daily message cap.
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-2 self-start rounded-full bg-[#fff3f3] px-3 py-1 text-xs font-semibold text-[var(--danger)]">
+                Changes apply live
+              </span>
+            </div>
+            <div className="grid gap-6 lg:grid-cols-2">
+              {renderPaywallLang("🇬🇧 English", paywallEn, setPaywallEn)}
+              {renderPaywallLang("🇮🇹 Italian", paywallIt, setPaywallIt)}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="submit"
+                disabled={savingKey === "paywall"}
+                className={PRIMARY_BUTTON}
+              >
+                {savingKey === "paywall" ? "Saving..." : "Save paywall content"}
               </button>
             </div>
           </form>
