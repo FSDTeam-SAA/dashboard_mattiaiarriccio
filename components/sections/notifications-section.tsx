@@ -34,9 +34,19 @@ type NotificationType =
   | "inspection"
   | "checklist_item"
   | "premium_expiry"
+  | "premium_offer"
+  | "guide_update"
+  | "app_update"
   | "custom";
 type HistoryChannel = "push" | "local" | "email";
 type SendChannel = "push" | "email";
+// Notification category an admin can choose when composing. Each maps to a
+// user per-category preference on the backend (utils/notificationPrefs.js).
+type SendNotificationType =
+  | "app_update"
+  | "guide_update"
+  | "premium_offer"
+  | "custom";
 type AudienceType = "all" | "free" | "premium" | "category" | "specific";
 type TabId = "compose" | "templates" | "history";
 
@@ -86,6 +96,8 @@ type NotificationFormState = {
   title: string;
   body: string;
   channels: SendChannel[];
+  // Category type; decides which user preference gates delivery.
+  notificationType: SendNotificationType;
   audienceType: AudienceType;
   categorySlug: string;
   // Whitespace/comma separated user ids, used only for the "specific" audience.
@@ -134,8 +146,20 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   inspection: "Inspection",
   checklist_item: "Checklist reminder",
   premium_expiry: "Premium expiry",
+  premium_offer: "Premium offer",
+  guide_update: "Guide update",
+  app_update: "App update",
   custom: "Custom",
 };
+
+// Options for the compose "Category" selector. The helper text spells out which
+// user preference each one respects so admins know who can silence it.
+const SEND_TYPE_OPTIONS: Array<{ value: SendNotificationType; label: string }> = [
+  { value: "app_update", label: "App update (announcements)" },
+  { value: "guide_update", label: "Guide update" },
+  { value: "premium_offer", label: "Premium offer" },
+  { value: "custom", label: "Custom / general" },
+];
 
 const AUDIENCE_LABEL: Record<AudienceType, string> = {
   all: "All users",
@@ -151,6 +175,7 @@ const emptyForm = (): NotificationFormState => ({
   title: "",
   body: "",
   channels: ["push"],
+  notificationType: "app_update",
   audienceType: "all",
   categorySlug: "",
   userIds: "",
@@ -438,6 +463,7 @@ export function NotificationsSection({ token, notify }: SectionProps) {
           title: composeForm.title,
           body: composeForm.body,
           channels: composeForm.channels,
+          notificationType: composeForm.notificationType,
           audienceType: composeForm.audienceType,
           categorySlug: composeForm.categorySlug,
           userIds:
@@ -710,6 +736,30 @@ export function NotificationsSection({ token, notify }: SectionProps) {
               <p className="mb-3 text-sm font-semibold text-[#33292b]">Audience</p>
               {renderAudienceControls("compose", composeForm)}
             </div>
+          </div>
+
+          <div className="rounded-[12px] border border-[#ece4e4] bg-white p-4">
+            <p className="mb-1 text-sm font-semibold text-[#33292b]">Category</p>
+            <p className="mb-3 text-xs font-medium text-[#7a7275]">
+              Recipients who turned this category off in the app won&apos;t get
+              this notification.
+            </p>
+            <select
+              value={composeForm.notificationType}
+              onChange={(event) =>
+                setComposeForm((prev) => ({
+                  ...prev,
+                  notificationType: event.target.value as SendNotificationType,
+                }))
+              }
+              className="w-full rounded-[10px] border border-[#e0d6d6] bg-white px-3 py-2 text-sm text-[#2b2526] focus:border-[var(--danger)] focus:outline-none"
+            >
+              {SEND_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
