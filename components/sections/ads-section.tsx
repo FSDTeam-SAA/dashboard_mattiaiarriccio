@@ -39,7 +39,19 @@ const FORMAT_OPTIONS: { value: AdFormat; label: string }[] = [
   { value: "banner+native", label: "Banner + Native" },
 ];
 
-const KNOWN_PLACEMENTS = ["home", "checklists", "guides", "chat", "materials"] as const;
+const KNOWN_PLACEMENTS = [
+  "home",
+  "checklists",
+  "guides",
+  "chat",
+  "materials",
+  "history",
+  "profile",
+  "notifications",
+  "guide_details",
+  "checklist_details",
+  "about",
+] as const;
 
 const PLACEMENT_LABELS: Record<string, string> = {
   home: "Home",
@@ -47,6 +59,12 @@ const PLACEMENT_LABELS: Record<string, string> = {
   guides: "Guides",
   chat: "Chat",
   materials: "Materials",
+  history: "History",
+  profile: "Profile",
+  notifications: "Notifications",
+  guide_details: "Guide details",
+  checklist_details: "Checklist details",
+  about: "About",
 };
 
 const INPUT_CLASS =
@@ -60,7 +78,7 @@ function normalizeConfig(data: AdConfigResponse): AdConfigResponse {
   return {
     adsEnabled: Boolean(data?.adsEnabled),
     adConfig: {
-      format: (data?.adConfig?.format as AdFormat) || "banner",
+      format: (data?.adConfig?.format as AdFormat) || "banner+native",
       placements: Array.isArray(data?.adConfig?.placements)
         ? data.adConfig.placements
         : [],
@@ -87,7 +105,7 @@ export function AdsSection({ token, notify }: SectionProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [adsEnabled, setAdsEnabled] = useState(false);
-  const [format, setFormat] = useState<AdFormat>("banner");
+  const [format, setFormat] = useState<AdFormat>("banner+native");
   const [placements, setPlacements] = useState<string[]>([]);
   const [nativeFrequency, setNativeFrequency] = useState(1);
   const [androidUnits, setAndroidUnits] = useState<PlatformUnitIds>(emptyPlatform());
