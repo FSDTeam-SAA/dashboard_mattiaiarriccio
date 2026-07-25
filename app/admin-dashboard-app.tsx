@@ -723,6 +723,7 @@ export default function AdminDashboardApp() {
 
   const openChecklistModal = (record?: ChecklistRecord) => {
     if (record) {
+      const mainImageUrl = record.iconUrl?.trim() || record.coverImageUrl?.trim() || "";
       setChecklistForm({
         id: record.id,
         title: record.title,
@@ -730,9 +731,9 @@ export default function AdminDashboardApp() {
         description: record.description,
         language: record.language || "en",
         status: record.status,
-        iconUrl: record.iconUrl,
+        iconUrl: mainImageUrl,
         icon: record.icon || "",
-        coverImageUrl: record.coverImageUrl,
+        coverImageUrl: mainImageUrl,
         premiumOnly: Boolean(record.premiumOnly),
         items: record.items.map((item) => ({
           id: item.id,
@@ -757,6 +758,7 @@ export default function AdminDashboardApp() {
 
   const openSafetyTipModal = (record?: SafetyTipRecord) => {
     if (record) {
+      const mainImageUrl = record.coverImageUrl?.trim() || record.thumbnailUrl?.trim() || "";
       setSafetyTipForm({
         id: record.id,
         title: record.title,
@@ -767,8 +769,8 @@ export default function AdminDashboardApp() {
         featured: record.featured,
         premiumOnly: Boolean(record.premiumOnly),
         estimatedReadMinutes: record.estimatedReadMinutes,
-        coverImageUrl: record.coverImageUrl,
-        thumbnailUrl: record.thumbnailUrl,
+        coverImageUrl: mainImageUrl,
+        thumbnailUrl: mainImageUrl,
         contentSections:
           record.contentSections.length > 0
             ? record.contentSections
@@ -849,15 +851,18 @@ export default function AdminDashboardApp() {
     setLoading(true);
 
     try {
+      const mainImageUrl = checklistForm.iconUrl.trim();
       const body: Record<string, unknown> = {
         title: checklistForm.title,
         category: checklistForm.categorySlug,
         description: checklistForm.description,
         language: checklistForm.language,
         status: checklistForm.status,
-        iconUrl: checklistForm.iconUrl,
+        iconUrl: mainImageUrl,
         iconEmoji: checklistForm.icon,
-        coverImageUrl: checklistForm.coverImageUrl,
+        // Keep the legacy API aliases synchronized while the dashboard shows
+        // only one main-image control.
+        coverImageUrl: mainImageUrl,
         premiumOnly: checklistForm.premiumOnly,
         items: checklistForm.items
           .map((item, index) => ({
@@ -876,10 +881,8 @@ export default function AdminDashboardApp() {
           .filter((item) => (item.text as string).trim()),
       };
 
-      if (checklistForm.id && !checklistForm.iconUrl) {
+      if (checklistForm.id && !mainImageUrl) {
         body.removeIconUrl = true;
-      }
-      if (checklistForm.id && !checklistForm.coverImageUrl) {
         body.removeCoverImageUrl = true;
       }
 
@@ -920,6 +923,7 @@ export default function AdminDashboardApp() {
     setLoading(true);
 
     try {
+      const mainImageUrl = safetyTipForm.coverImageUrl.trim();
       const body: Record<string, unknown> = {
         title: safetyTipForm.title,
         category: safetyTipForm.categorySlug,
@@ -929,8 +933,10 @@ export default function AdminDashboardApp() {
         featured: safetyTipForm.featured,
         premiumOnly: safetyTipForm.premiumOnly,
         estimatedReadMinutes: Number(safetyTipForm.estimatedReadMinutes),
-        coverImageUrl: safetyTipForm.coverImageUrl,
-        thumbnailUrl: safetyTipForm.thumbnailUrl,
+        coverImageUrl: mainImageUrl,
+        // Keep the legacy API aliases synchronized while the dashboard shows
+        // only one main-image control.
+        thumbnailUrl: mainImageUrl,
         contentSections: safetyTipForm.contentSections.filter(
           (section) => section.heading.trim() || section.body.trim()
         ),
@@ -939,10 +945,8 @@ export default function AdminDashboardApp() {
         tags: safetyTipForm.tags.filter((item) => item.trim()),
       };
 
-      if (safetyTipForm.id && !safetyTipForm.coverImageUrl) {
+      if (safetyTipForm.id && !mainImageUrl) {
         body.removeCoverImageUrl = true;
-      }
-      if (safetyTipForm.id && !safetyTipForm.thumbnailUrl) {
         body.removeThumbnailUrl = true;
       }
 
@@ -1159,13 +1163,21 @@ export default function AdminDashboardApp() {
       const secureUrl = await uploadAsset(file, folder, token);
 
       if (scope === "checklist") {
-        setChecklistForm((current) => ({ ...current, [field]: secureUrl }));
+        setChecklistForm((current) => ({
+          ...current,
+          iconUrl: secureUrl,
+          coverImageUrl: secureUrl,
+        }));
         setToast({ kind: "success", message: "Media uploaded successfully." });
       } else if (scope === "profile") {
         await persistAdminAvatar(secureUrl, token);
         setToast({ kind: "success", message: "Avatar uploaded successfully." });
       } else {
-        setSafetyTipForm((current) => ({ ...current, [field]: secureUrl }));
+        setSafetyTipForm((current) => ({
+          ...current,
+          coverImageUrl: secureUrl,
+          thumbnailUrl: secureUrl,
+        }));
         setToast({ kind: "success", message: "Media uploaded successfully." });
       }
     } catch (error) {
@@ -1222,7 +1234,11 @@ export default function AdminDashboardApp() {
     field: "iconUrl" | "coverImageUrl" | "thumbnailUrl" | "avatarUrl"
   ) => {
     if (scope === "checklist") {
-      setChecklistForm((current) => ({ ...current, [field]: "" }));
+      setChecklistForm((current) => ({
+        ...current,
+        iconUrl: "",
+        coverImageUrl: "",
+      }));
       setToast({
         kind: "success",
         message: "Image removed. Save changes to apply.",
@@ -1231,7 +1247,11 @@ export default function AdminDashboardApp() {
     }
 
     if (scope === "tip") {
-      setSafetyTipForm((current) => ({ ...current, [field]: "" }));
+      setSafetyTipForm((current) => ({
+        ...current,
+        coverImageUrl: "",
+        thumbnailUrl: "",
+      }));
       setToast({
         kind: "success",
         message: "Image removed. Save changes to apply.",
@@ -2579,12 +2599,13 @@ export default function AdminDashboardApp() {
             <div className="rounded-[24px] border border-[var(--border)] bg-[var(--panel-muted)] p-4">
               <p className="text-sm font-semibold text-[#201a1b]">Upload checklist media</p>
               <p className="mt-1 text-xs leading-6 text-[var(--muted)]">
-                PNG/JPG up to 5 MB. If upload is unavailable, set an emoji fallback below — the app
-                renders the emoji whenever the image is missing.
+                Upload one PNG/JPG main image up to 5 MB. The app uses it in the
+                checklist list and detail screens. If it is missing, set an emoji
+                fallback below.
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
                 <label className="cursor-pointer rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]">
-                  {checklistForm.iconUrl ? "Replace icon" : "Upload icon"}
+                  {checklistForm.iconUrl ? "Replace main image" : "Upload main image"}
                   <input
                     type="file"
                     accept="image/*"
@@ -2600,32 +2621,7 @@ export default function AdminDashboardApp() {
                     onClick={() => handleMediaRemove("checklist", "iconUrl")}
                     className="rounded-full border border-[var(--danger-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--danger)]"
                   >
-                    Remove icon
-                  </button>
-                ) : null}
-                <label className="cursor-pointer rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]">
-                  {checklistForm.coverImageUrl ? "Replace cover" : "Upload cover"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) =>
-                      void handleMediaUpload(
-                        event,
-                        "checklists",
-                        "checklist",
-                        "coverImageUrl"
-                      )
-                    }
-                  />
-                </label>
-                {checklistForm.coverImageUrl ? (
-                  <button
-                    type="button"
-                    onClick={() => handleMediaRemove("checklist", "coverImageUrl")}
-                    className="rounded-full border border-[var(--danger-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--danger)]"
-                  >
-                    Remove cover
+                    Remove main image
                   </button>
                 ) : null}
               </div>
@@ -2651,32 +2647,17 @@ export default function AdminDashboardApp() {
             rows={4}
           />
 
-          {(checklistForm.iconUrl || checklistForm.coverImageUrl) && (
-            <div className="grid gap-4 md:grid-cols-2">
-              {checklistForm.iconUrl ? (
-                <div className="rounded-[24px] border border-[var(--border)] bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
-                    Icon preview
-                  </p>
-                  <div
-                    className="mt-3 h-24 rounded-2xl bg-cover bg-center"
-                    style={{ backgroundImage: `url(${checklistForm.iconUrl})` }}
-                  />
-                </div>
-              ) : null}
-              {checklistForm.coverImageUrl ? (
-                <div className="rounded-[24px] border border-[var(--border)] bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
-                    Cover preview
-                  </p>
-                  <div
-                    className="mt-3 h-24 rounded-2xl bg-cover bg-center"
-                    style={{ backgroundImage: `url(${checklistForm.coverImageUrl})` }}
-                  />
-                </div>
-              ) : null}
+          {checklistForm.iconUrl ? (
+            <div className="rounded-[24px] border border-[var(--border)] bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
+                Main image preview
+              </p>
+              <div
+                className="mt-3 h-24 rounded-2xl bg-cover bg-center"
+                style={{ backgroundImage: `url(${checklistForm.iconUrl})` }}
+              />
             </div>
-          )}
+          ) : null}
 
           <div className="rounded-[28px] border border-[var(--border)] bg-[var(--panel-muted)] p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3005,12 +2986,13 @@ export default function AdminDashboardApp() {
               <div>
                 <p className="text-lg font-bold text-[#201a1b]">Guide media</p>
                 <p className="text-sm text-[var(--muted)]">
-                  Upload the hero cover and list thumbnail directly using form-data. Manual URL entry is disabled.
+                  Upload one PNG/JPG main image up to 5 MB. The app uses it in
+                  guide lists and detail pages.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
                 <label className="cursor-pointer rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]">
-                  {safetyTipForm.coverImageUrl ? "Replace cover" : "Upload cover"}
+                  {safetyTipForm.coverImageUrl ? "Replace main image" : "Upload main image"}
                   <input
                     type="file"
                     accept="image/*"
@@ -3026,57 +3008,22 @@ export default function AdminDashboardApp() {
                     onClick={() => handleMediaRemove("tip", "coverImageUrl")}
                     className="rounded-full border border-[var(--danger-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--danger)]"
                   >
-                    Remove cover
-                  </button>
-                ) : null}
-                <label className="cursor-pointer rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]">
-                  {safetyTipForm.thumbnailUrl ? "Replace thumbnail" : "Upload thumbnail"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) =>
-                      void handleMediaUpload(event, "safety-tips", "tip", "thumbnailUrl")
-                    }
-                  />
-                </label>
-                {safetyTipForm.thumbnailUrl ? (
-                  <button
-                    type="button"
-                    onClick={() => handleMediaRemove("tip", "thumbnailUrl")}
-                    className="rounded-full border border-[var(--danger-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--danger)]"
-                  >
-                    Remove thumbnail
+                    Remove main image
                   </button>
                 ) : null}
               </div>
             </div>
-            {(safetyTipForm.coverImageUrl || safetyTipForm.thumbnailUrl) && (
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {safetyTipForm.coverImageUrl ? (
-                  <div className="rounded-[24px] border border-[var(--border)] bg-white p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
-                      Cover preview
-                    </p>
-                    <div
-                      className="mt-3 h-28 rounded-2xl bg-cover bg-center"
-                      style={{ backgroundImage: `url(${safetyTipForm.coverImageUrl})` }}
-                    />
-                  </div>
-                ) : null}
-                {safetyTipForm.thumbnailUrl ? (
-                  <div className="rounded-[24px] border border-[var(--border)] bg-white p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
-                      Thumbnail preview
-                    </p>
-                    <div
-                      className="mt-3 h-28 rounded-2xl bg-cover bg-center"
-                      style={{ backgroundImage: `url(${safetyTipForm.thumbnailUrl})` }}
-                    />
-                  </div>
-                ) : null}
+            {safetyTipForm.coverImageUrl ? (
+              <div className="mt-4 rounded-[24px] border border-[var(--border)] bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
+                  Main image preview
+                </p>
+                <div
+                  className="mt-3 h-28 rounded-2xl bg-cover bg-center"
+                  style={{ backgroundImage: `url(${safetyTipForm.coverImageUrl})` }}
+                />
               </div>
-            )}
+            ) : null}
           </div>
 
           <div className="rounded-[28px] border border-[var(--border)] bg-white p-5 shadow-[0_18px_40px_rgba(26,18,18,0.04)]">
