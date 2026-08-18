@@ -25,7 +25,8 @@ export function AppIcon({
     | "ads"
     | "emergency"
     | "materials"
-    | "notifications";
+    | "notifications"
+    | "websearch";
   className?: string;
 }) {
   const sharedProps = {
@@ -184,6 +185,15 @@ export function AppIcon({
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
       );
+    case "websearch":
+      return (
+        <svg {...sharedProps}>
+          <circle cx="11" cy="11" r="7" />
+          <path d="M4 11h14" />
+          <path d="M11 4c1.9 2 2.9 4.4 2.9 7s-1 5-2.9 7c-1.9-2-2.9-4.4-2.9-7s1-5 2.9-7z" />
+          <path d="m20 20-3.2-3.2" />
+        </svg>
+      );
   }
 }
 
@@ -325,7 +335,7 @@ export function StatCard({
   label: string;
   value: string;
   tone: "red" | "blue" | "rose" | "green";
-  icon: "checklists" | "tips" | "prompt" | "published";
+  icon: "checklists" | "tips" | "prompt" | "published" | "websearch" | "clock";
 }) {
   const toneMap = {
     red: {

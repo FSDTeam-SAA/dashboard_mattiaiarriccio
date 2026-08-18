@@ -38,6 +38,7 @@ import { AdsSection } from "@/components/sections/ads-section";
 import { EmergencyResponsesSection } from "@/components/sections/emergency-responses-section";
 import { MaterialsSection } from "@/components/sections/materials-section";
 import { NotificationsSection } from "@/components/sections/notifications-section";
+import { WebSearchSection } from "@/components/sections/web-search-section";
 
 type AuthMode = "login" | "forgot" | "otp" | "reset";
 type Section =
@@ -53,7 +54,8 @@ type Section =
   | "ads"
   | "emergency"
   | "materials"
-  | "notifications";
+  | "notifications"
+  | "websearch";
 type ToastState = { kind: "success" | "error"; message: string } | null;
 
 type DashboardData = {
@@ -237,6 +239,7 @@ const navItems: Array<{ id: Section; label: string; eyebrow: string }> = [
   { id: "checklists", label: "Checklists", eyebrow: "Preparedness" },
   { id: "tips", label: "Safety tips", eyebrow: "Guides" },
   { id: "prompt", label: "Chat bot prompts", eyebrow: "AI" },
+  { id: "websearch", label: "Web Search", eyebrow: "Live info" },
   { id: "emergency", label: "Smart playbooks", eyebrow: "Emergency AI" },
   { id: "users", label: "Users", eyebrow: "Members" },
   { id: "coupons", label: "Coupons", eyebrow: "Access codes" },
@@ -368,7 +371,9 @@ const getSectionIconName = (section: Section) =>
                       ? "emergency"
                       : section === "materials"
                         ? "materials"
-                        : "notifications";
+                        : section === "websearch"
+                          ? "websearch"
+                          : "notifications";
 
 export default function AdminDashboardApp() {
   const [booting, setBooting] = useState(true);
@@ -2091,6 +2096,12 @@ export default function AdminDashboardApp() {
       title: "Chat bot prompts",
       description: "Control Free and Premium response styles plus language-specific chat copy.",
     },
+    websearch: {
+      eyebrow: "Live info",
+      title: "Web Search",
+      description:
+        "Approved sources, daily limits, the Live Information shortcuts, and the prompt that turns live results into safety guidance.",
+    },
     categories: {
       eyebrow: "Categories",
       title: "Categories",
@@ -2170,6 +2181,8 @@ export default function AdminDashboardApp() {
         return <SystemSettingsSection token={token} notify={notify} />;
       case "ads":
         return <AdsSection token={token} notify={notify} />;
+      case "websearch":
+        return <WebSearchSection token={token} notify={notify} />;
       case "emergency":
         return <EmergencyResponsesSection token={token} notify={notify} />;
       case "materials":
