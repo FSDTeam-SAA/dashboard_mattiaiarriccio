@@ -38,8 +38,8 @@ type NotificationType =
   | "guide_update"
   | "app_update"
   | "custom";
-type HistoryChannel = "push" | "local" | "email";
-type SendChannel = "push" | "email";
+type HistoryChannel = "push" | "local";
+type SendChannel = "push";
 // Notification category an admin can choose when composing. Each maps to a
 // user per-category preference on the backend (utils/notificationPrefs.js).
 type SendNotificationType =
@@ -129,7 +129,6 @@ const STATUS_OPTIONS: Array<{ value: "" | NotificationStatus; label: string }> =
 const CHANNEL_FILTER_OPTIONS: Array<{ value: "" | HistoryChannel; label: string }> = [
   { value: "", label: "All channels" },
   { value: "push", label: "Push" },
-  { value: "email", label: "Email" },
   { value: "local", label: "Local" },
 ];
 
@@ -227,7 +226,7 @@ function formatDateTime(value?: string | null) {
 }
 
 function channelLabel(channel: SendChannel | HistoryChannel) {
-  return channel === "push" ? "Push" : channel === "email" ? "Email" : "Local";
+  return channel === "push" ? "Push" : "Local";
 }
 
 function categoryLabel(category: CategoryOption) {
@@ -298,7 +297,11 @@ export function NotificationsSection({ token, notify }: SectionProps) {
         "/admin/notifications/templates?limit=100",
         { token }
       );
-      setTemplates(Array.isArray(data) ? data : []);
+      setTemplates(
+        Array.isArray(data)
+          ? data.map((template) => ({ ...template, channels: ["push"] }))
+          : []
+      );
     } catch (err) {
       const e = err as ApiErrorShape;
       notify("error", e.message || "Request failed");
@@ -568,7 +571,7 @@ export function NotificationsSection({ token, notify }: SectionProps) {
 
   const renderChannelToggles = (target: "compose" | "template", form: NotificationFormState) => (
     <div className="grid gap-3 sm:grid-cols-2">
-      {(["push", "email"] as SendChannel[]).map((channel) => {
+      {(["push"] as SendChannel[]).map((channel) => {
         const active = form.channels.includes(channel);
         return (
           <button
@@ -1065,7 +1068,7 @@ export function NotificationsSection({ token, notify }: SectionProps) {
             Notifications
           </h2>
           <p className="mt-1 text-sm text-[#6d6668]">
-            Create reusable templates and send push or email notifications.
+            Create reusable templates and send in-app/push notifications.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
