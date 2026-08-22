@@ -46,15 +46,49 @@ type ApprovedDomainsResponse = {
   overLimit: boolean;
 };
 
+type SuggestionKind = "live_info" | "suggested_question";
+
 type LiveInfoSuggestion = {
   id: string;
   title: string;
   prompt: string;
   icon: string;
+  kind: SuggestionKind;
+  requiresLocation: boolean;
   language: Language;
   order: number;
   active: boolean;
 };
+
+/**
+ * The two lists the chat welcome screen shows. Same five controls on both -
+ * title, prompt, language, order, enabled - which is why they share one editor
+ * rather than getting a page each.
+ */
+const SUGGESTION_KINDS: Array<{
+  value: SuggestionKind;
+  tab: string;
+  heading: string;
+  blurb: string;
+  addLabel: string;
+}> = [
+  {
+    value: "live_info",
+    tab: "Live Information buttons",
+    heading: "Live Information buttons",
+    blurb:
+      "The live-search shortcuts in the chat welcome screen. Hidden in the app whenever Web Search is off or no source is approved.",
+    addLabel: "+ Add button",
+  },
+  {
+    value: "suggested_question",
+    tab: "Suggested Questions",
+    heading: "Suggested Questions",
+    blurb:
+      "The question list above the buttons. Mix questions that need a live lookup with ones WeSafe answers from its own guidance, so users learn it does both.",
+    addLabel: "+ Add question",
+  },
+];
 
 type UsageSummary = {
   today: number;
@@ -107,6 +141,8 @@ const emptySuggestionForm = {
   icon: "",
   title: "",
   prompt: "",
+  kind: "live_info" as SuggestionKind,
+  requiresLocation: false,
   language: "en" as Language,
   order: 0,
   active: true,
@@ -142,6 +178,8 @@ export function WebSearchSection({ token, notify }: SectionProps) {
   const [suggestionLanguage, setSuggestionLanguage] = useState<Language | "all">(
     "all"
   );
+  const [suggestionKind, setSuggestionKind] =
+    useState<SuggestionKind>("live_info");
 
   // Modals
   const [domainForm, setDomainForm] = useState(emptyDomainForm);
@@ -390,18 +428,38 @@ export function WebSearchSection({ token, notify }: SectionProps) {
 
   /* ---- suggestion CRUD ---- */
 
+  const activeKind = useMemo(
+    () =>
+      SUGGESTION_KINDS.find((entry) => entry.value === suggestionKind) ??
+      SUGGESTION_KINDS[0],
+    [suggestionKind]
+  );
+
+  // Rows written before `kind` existed are Live Information buttons, so a
+  // missing value is read as that rather than dropped from both lists.
+  const suggestionsOfKind = useMemo(
+    () =>
+      suggestions.filter(
+        (item) => (item.kind ?? "live_info") === suggestionKind
+      ),
+    [suggestions, suggestionKind]
+  );
+
   const visibleSuggestions = useMemo(
     () =>
       suggestionLanguage === "all"
-        ? suggestions
-        : suggestions.filter((item) => item.language === suggestionLanguage),
-    [suggestions, suggestionLanguage]
+        ? suggestionsOfKind
+        : suggestionsOfKind.filter(
+            (item) => item.language === suggestionLanguage
+          ),
+    [suggestionsOfKind, suggestionLanguage]
   );
 
   const openCreateSuggestion = () => {
     setEditingSuggestion(null);
     setSuggestionForm({
       ...emptySuggestionForm,
+      kind: suggestionKind,
       language: suggestionLanguage === "all" ? "en" : suggestionLanguage,
       order: visibleSuggestions.length,
     });
@@ -414,6 +472,8 @@ export function WebSearchSection({ token, notify }: SectionProps) {
       icon: item.icon,
       title: item.title,
       prompt: item.prompt,
+      kind: item.kind ?? "live_info",
+      requiresLocation: item.requiresLocation === true,
       language: item.language,
       order: item.order,
       active: item.active,
@@ -436,14 +496,14 @@ export function WebSearchSection({ token, notify }: SectionProps) {
           method: "PATCH",
           body: suggestionForm,
         });
-        notify("success", "Live Information shortcut updated.");
+        notify("success", "Saved.");
       } else {
         await apiRequest("/admin/live-info-suggestions", {
           token,
           method: "POST",
           body: suggestionForm,
         });
-        notify("success", "Live Information shortcut created.");
+        notify("success", "Created.");
       }
       setSuggestionModalOpen(false);
       setEditingSuggestion(null);
@@ -475,7 +535,11 @@ export function WebSearchSection({ token, notify }: SectionProps) {
   ) => {
     if (!token) return;
     const sameLanguage = suggestions
-      .filter((entry) => entry.language === item.language)
+      .filter(
+        (entry) =>
+          entry.language === item.language &&
+          (entry.kind ?? "live_info") === (item.kind ?? "live_info")
+      )
       .sort((a, b) => a.order - b.order);
     const index = sameLanguage.findIndex((entry) => entry.id === item.id);
     const neighbour = sameLanguage[index + direction];
@@ -507,7 +571,7 @@ export function WebSearchSection({ token, notify }: SectionProps) {
         token,
         method: "DELETE",
       });
-      notify("success", "Live Information shortcut removed.");
+      notify("success", "Removed.");
       setDeletingSuggestion(null);
       await loadSuggestions();
     } catch (error) {
@@ -727,21 +791,46 @@ export function WebSearchSection({ token, notify }: SectionProps) {
         </div>
       </section>
 
-      {/* 4. Live Information shortcuts */}
+      {/* 4. Chat welcome screen prompts */}
       <section className={PANEL_CARD}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-bold text-[#201a1b]">
-              Live Information shortcuts
+              {activeKind.heading}
             </h3>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              The chips shown in the chat welcome screen. Tapping one sends its
-              prompt as a normal message.
+              {activeKind.blurb} Tapping one sends its prompt as a normal
+              message, so the usual limits apply.
             </p>
           </div>
           <button type="button" onClick={openCreateSuggestion} className={PRIMARY_BUTTON}>
-            + Add shortcut
+            {activeKind.addLabel}
           </button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2 border-b border-[#ece4e4] pb-4">
+          {SUGGESTION_KINDS.map((entry) => (
+            <button
+              key={entry.value}
+              type="button"
+              onClick={() => setSuggestionKind(entry.value)}
+              className={classNames(
+                "rounded-full border px-4 py-2 text-xs font-semibold transition",
+                suggestionKind === entry.value
+                  ? "border-[#1771d6] bg-[#1771d6] text-white"
+                  : "border-[var(--border)] text-[#6b5b5d] hover:border-[#1771d6]"
+              )}
+            >
+              {entry.tab}
+              <span className="ml-2 opacity-70">
+                {
+                  suggestions.filter(
+                    (item) => (item.kind ?? "live_info") === entry.value
+                  ).length
+                }
+              </span>
+            </button>
+          ))}
         </div>
 
         <div className="mt-4 flex gap-2">
@@ -765,7 +854,7 @@ export function WebSearchSection({ token, notify }: SectionProps) {
         <div className="mt-4 space-y-2">
           {visibleSuggestions.length === 0 ? (
             <p className="rounded-[10px] border border-dashed border-[#ddd0d0] px-4 py-8 text-center text-sm text-[var(--muted)]">
-              No shortcuts for this language yet.
+              Nothing in this list for the selected language yet.
             </p>
           ) : (
             visibleSuggestions
@@ -794,6 +883,11 @@ export function WebSearchSection({ token, notify }: SectionProps) {
                       >
                         {item.active ? "active" : "disabled"}
                       </span>
+                      {item.requiresLocation ? (
+                        <span className="rounded-full bg-[#e7f0fb] px-3 py-1 text-xs font-semibold text-[#12558f]">
+                          asks for location
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-1 truncate text-sm text-[var(--muted)]">{item.prompt}</p>
                   </div>
@@ -973,12 +1067,12 @@ export function WebSearchSection({ token, notify }: SectionProps) {
 
       <Modal
         open={suggestionModalOpen}
-        title={
-          editingSuggestion
-            ? "Edit Live Information shortcut"
-            : "Add Live Information shortcut"
-        }
-        subtitle="The prompt should mention current conditions so it reliably triggers a live search."
+        title={`${editingSuggestion ? "Edit" : "Add"} ${
+          suggestionForm.kind === "suggested_question"
+            ? "suggested question"
+            : "Live Information button"
+        }`}
+        subtitle="A prompt that should reach a live search has to mention current conditions - weather, alerts, earthquakes, updates - or the cost gate will not open it."
         onClose={() => {
           setSuggestionModalOpen(false);
           setEditingSuggestion(null);
@@ -1000,11 +1094,40 @@ export function WebSearchSection({ token, notify }: SectionProps) {
             />
           </div>
           <TextAreaField
-            label="Prompt sent to the chat"
+            label="Prompt sent to WeSafe AI"
             rows={3}
             value={suggestionForm.prompt}
             onChange={(value) => setSuggestionForm((f) => ({ ...f, prompt: value }))}
           />
+          <p className="-mt-2 text-xs text-[var(--muted)]">
+            The user only ever sees the title. Write the prompt for the model:
+            say what to look for and how to answer. Put{" "}
+            <code className="rounded bg-[#f3ecec] px-1 py-0.5 font-mono">
+              {"{location}"}
+            </code>{" "}
+            where the place belongs and the app fills it in.
+          </p>
+          <label className={TOGGLE_ROW}>
+            <span className="pr-4">
+              Ask for a location first
+              <span className="mt-1 block text-xs font-normal text-[var(--muted)]">
+                Offers current location or another place before sending. Use it
+                for weather, alerts and earthquakes; leave it off for questions
+                that are not about one place.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={suggestionForm.requiresLocation}
+              onChange={(event) =>
+                setSuggestionForm((f) => ({
+                  ...f,
+                  requiresLocation: event.target.checked,
+                }))
+              }
+              className="h-5 w-5 shrink-0 accent-[var(--danger)]"
+            />
+          </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2">
               <span className="text-sm font-semibold text-[#33292b]">Language</span>
@@ -1043,7 +1166,7 @@ export function WebSearchSection({ token, notify }: SectionProps) {
             />
           </label>
           <button type="submit" className={PRIMARY_BUTTON}>
-            {editingSuggestion ? "Save changes" : "Add shortcut"}
+            {editingSuggestion ? "Save changes" : "Add"}
           </button>
         </form>
       </Modal>
