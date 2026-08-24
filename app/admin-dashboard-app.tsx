@@ -1572,9 +1572,10 @@ export default function AdminDashboardApp() {
                 Language-specific prompt details
               </h3>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Each language has its own welcome, base instruction, fallback response,
-                and suggested questions. The tier prompts above still decide Free versus
-                Premium answer style.
+                Each language has its own welcome, base instruction, and fallback
+                response. Quick Questions are managed separately from this prompt in
+                the Web Search dashboard page. The tier prompts above still decide Free
+                versus Premium answer style.
               </p>
             </div>
             <button
@@ -1618,19 +1619,6 @@ export default function AdminDashboardApp() {
               label="Fallback response"
               value={activeForm.fallbackMessage}
               onChange={(value) => updateActiveForm({ fallbackMessage: value })}
-              rows={4}
-            />
-            <TextAreaField
-              label="Suggested questions"
-              value={activeForm.suggestedQuestions.join("\n")}
-              onChange={(value) =>
-                updateActiveForm({
-                  suggestedQuestions: value
-                    .split("\n")
-                    .map((item) => item.trim())
-                    .filter(Boolean),
-                })
-              }
               rows={4}
             />
           </div>

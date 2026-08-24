@@ -20,6 +20,10 @@ type Language = "en" | "it";
 
 type LocalizedText = { en: string; it: string };
 type LocalizedList = { en: string[]; it: string[] };
+type LocalizedSectionContent = {
+  en: { title: string; description: string };
+  it: { title: string; description: string };
+};
 
 type WebSearchSettings = {
   webSearchEnabled: boolean;
@@ -28,6 +32,7 @@ type WebSearchSettings = {
   webSearchContextSize: "low" | "medium" | "high";
   webSearchPrompt: LocalizedText;
   webSearchTriggers: LocalizedList;
+  webSearchSectionContent: LocalizedSectionContent;
 };
 
 type ApprovedDomain = {
@@ -46,7 +51,10 @@ type ApprovedDomainsResponse = {
   overLimit: boolean;
 };
 
-type SuggestionKind = "live_info" | "suggested_question";
+type SuggestionKind =
+  | "live_info"
+  | "suggested_question"
+  | "web_search_example";
 
 type LiveInfoSuggestion = {
   id: string;
@@ -74,19 +82,27 @@ const SUGGESTION_KINDS: Array<{
 }> = [
   {
     value: "live_info",
-    tab: "Live Information buttons",
-    heading: "Live Information buttons",
+    tab: "Web Search buttons",
+    heading: "Web Search buttons",
     blurb:
       "The live-search shortcuts in the chat welcome screen. Hidden in the app whenever Web Search is off or no source is approved.",
     addLabel: "+ Add button",
   },
   {
     value: "suggested_question",
-    tab: "Suggested Questions",
-    heading: "Suggested Questions",
+    tab: "Quick Questions",
+    heading: "Quick Questions",
     blurb:
-      "The question list above the buttons. Mix questions that need a live lookup with ones WeSafe answers from its own guidance, so users learn it does both.",
+      "The ordinary suggested questions shown above Web Search. Keep these focused on preparedness and stored WeSafe guidance; live-search discovery is managed in the other two tabs.",
     addLabel: "+ Add question",
+  },
+  {
+    value: "web_search_example",
+    tab: "Web Search examples",
+    heading: "Web Search examples",
+    blurb:
+      "Small example questions shown below the four Web Search buttons. Use these to show that users can type other live-information questions too.",
+    addLabel: "+ Add example",
   },
 ];
 
@@ -97,7 +113,7 @@ type UsageSummary = {
   byDay: Array<{ date: string; count: number }>;
 };
 
-type SaveKey = "limits" | "prompt" | "triggers";
+type SaveKey = "limits" | "section" | "prompt" | "triggers";
 
 /* ------------------------------------------------------------------ *
  * Shared styling, matching system-settings-section.tsx
@@ -165,6 +181,10 @@ export function WebSearchSection({ token, notify }: SectionProps) {
     useState<WebSearchSettings["webSearchContextSize"]>("low");
   const [prompt, setPrompt] = useState<LocalizedText>({ en: "", it: "" });
   const [triggers, setTriggers] = useState<LocalizedList>({ en: [], it: [] });
+  const [sectionContent, setSectionContent] = useState<LocalizedSectionContent>({
+    en: { title: "", description: "" },
+    it: { title: "", description: "" },
+  });
 
   // Collection-backed state
   const [usage, setUsage] = useState<UsageSummary | null>(null);
@@ -214,6 +234,16 @@ export function WebSearchSection({ token, notify }: SectionProps) {
     setTriggers({
       en: data.webSearchTriggers?.en ?? [],
       it: data.webSearchTriggers?.it ?? [],
+    });
+    setSectionContent({
+      en: {
+        title: data.webSearchSectionContent?.en?.title ?? "",
+        description: data.webSearchSectionContent?.en?.description ?? "",
+      },
+      it: {
+        title: data.webSearchSectionContent?.it?.title ?? "",
+        description: data.webSearchSectionContent?.it?.description ?? "",
+      },
     });
   }, []);
 
@@ -326,6 +356,25 @@ export function WebSearchSection({ token, notify }: SectionProps) {
       "prompt",
       { webSearchPrompt: { en: prompt.en, it: prompt.it } },
       "Web Search prompt saved."
+    );
+  };
+
+  const saveSectionContent = (event: FormEvent) => {
+    event.preventDefault();
+    const fields = [
+      sectionContent.en.title,
+      sectionContent.en.description,
+      sectionContent.it.title,
+      sectionContent.it.description,
+    ];
+    if (fields.some((value) => !value.trim())) {
+      notify("error", "The section title and description are required in both languages.");
+      return;
+    }
+    void patchSettings(
+      "section",
+      { webSearchSectionContent: sectionContent },
+      "Web Search section copy saved."
     );
   };
 
@@ -791,7 +840,55 @@ export function WebSearchSection({ token, notify }: SectionProps) {
         </div>
       </section>
 
-      {/* 4. Chat welcome screen prompts */}
+      {/* 4. Copy shown in the dedicated Web Search box */}
+      <form onSubmit={saveSectionContent} className={PANEL_CARD}>
+        <h3 className="text-lg font-bold text-[#201a1b]">
+          Mobile Web Search section
+        </h3>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          This title and explanation appear only in the dedicated Web Search box,
+          below Quick Questions.
+        </p>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {(["en", "it"] as Language[]).map((language) => (
+            <div key={language} className="space-y-4 rounded-2xl border border-[var(--border)] p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
+                {language === "en" ? "English" : "Italian"}
+              </p>
+              <Field
+                label="Section title"
+                value={sectionContent[language].title}
+                onChange={(value) =>
+                  setSectionContent((current) => ({
+                    ...current,
+                    [language]: { ...current[language], title: value },
+                  }))
+                }
+              />
+              <TextAreaField
+                label="Short description"
+                rows={4}
+                value={sectionContent[language].description}
+                onChange={(value) =>
+                  setSectionContent((current) => ({
+                    ...current,
+                    [language]: { ...current[language], description: value },
+                  }))
+                }
+              />
+            </div>
+          ))}
+        </div>
+        <button
+          type="submit"
+          disabled={savingKey === "section"}
+          className={classNames(PRIMARY_BUTTON, "mt-5")}
+        >
+          {savingKey === "section" ? "Saving..." : "Save section copy"}
+        </button>
+      </form>
+
+      {/* 5. Independent Quick Question and Web Search prompt lists */}
       <section className={PANEL_CARD}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -799,8 +896,8 @@ export function WebSearchSection({ token, notify }: SectionProps) {
               {activeKind.heading}
             </h3>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              {activeKind.blurb} Tapping one sends its prompt as a normal
-              message, so the usual limits apply.
+              {activeKind.blurb} The mobile app displays only the clean title;
+              IDs and internal prompts never appear to users.
             </p>
           </div>
           <button type="button" onClick={openCreateSuggestion} className={PRIMARY_BUTTON}>
@@ -941,7 +1038,7 @@ export function WebSearchSection({ token, notify }: SectionProps) {
         </div>
       </section>
 
-      {/* 5. Web Search prompt */}
+      {/* 6. Web Search prompt */}
       <form onSubmit={savePrompt} className={PANEL_CARD}>
         <h3 className="text-lg font-bold text-[#201a1b]">Web Search prompt</h3>
         <p className="mt-1 text-sm text-[var(--muted)]">
@@ -968,7 +1065,7 @@ export function WebSearchSection({ token, notify }: SectionProps) {
         </button>
       </form>
 
-      {/* 6. Trigger keywords */}
+      {/* 7. Trigger keywords */}
       <form onSubmit={saveTriggers} className={PANEL_CARD}>
         <h3 className="text-lg font-bold text-[#201a1b]">Trigger keywords</h3>
         <p className="mt-1 text-sm text-[var(--muted)]">
@@ -1048,6 +1145,7 @@ export function WebSearchSection({ token, notify }: SectionProps) {
             value={domainForm.order}
             onChange={(value) => setDomainForm((f) => ({ ...f, order: Number(value) }))}
           />
+          {suggestionForm.kind !== "suggested_question" ? (
           <label className={TOGGLE_ROW}>
             <span>Active</span>
             <input
@@ -1059,6 +1157,7 @@ export function WebSearchSection({ token, notify }: SectionProps) {
               className="h-5 w-5 accent-[var(--danger)]"
             />
           </label>
+          ) : null}
           <button type="submit" className={PRIMARY_BUTTON}>
             {editingDomain ? "Save changes" : "Add source"}
           </button>
@@ -1069,8 +1168,10 @@ export function WebSearchSection({ token, notify }: SectionProps) {
         open={suggestionModalOpen}
         title={`${editingSuggestion ? "Edit" : "Add"} ${
           suggestionForm.kind === "suggested_question"
-            ? "suggested question"
-            : "Live Information button"
+            ? "Quick Question"
+            : suggestionForm.kind === "web_search_example"
+              ? "Web Search example"
+              : "Web Search button"
         }`}
         subtitle="A prompt that should reach a live search has to mention current conditions - weather, alerts, earthquakes, updates - or the cost gate will not open it."
         onClose={() => {
