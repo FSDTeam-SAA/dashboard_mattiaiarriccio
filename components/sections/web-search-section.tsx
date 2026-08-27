@@ -85,7 +85,7 @@ const SUGGESTION_KINDS: Array<{
     tab: "Web Search buttons",
     heading: "Web Search buttons",
     blurb:
-      "The live-search shortcuts in the chat welcome screen. Hidden in the app whenever Web Search is off or no source is approved.",
+      "The live-search shortcuts on Home and the chat welcome screen. Each tap explicitly runs Web Search; the buttons stay hidden whenever Web Search is off or no source is approved.",
     addLabel: "+ Add button",
   },
   {
@@ -846,8 +846,8 @@ export function WebSearchSection({ token, notify }: SectionProps) {
           Mobile Web Search section
         </h3>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          This title and explanation appear only in the dedicated Web Search box,
-          below Quick Questions.
+          This title and explanation appear in the dedicated Web Search boxes on
+          Home and below Quick Questions in chat.
         </p>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {(["en", "it"] as Language[]).map((language) => (
