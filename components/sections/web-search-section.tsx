@@ -27,8 +27,6 @@ type LocalizedSectionContent = {
 
 type WebSearchSettings = {
   webSearchEnabled: boolean;
-  webSearchFreeDailyLimit: number;
-  webSearchPremiumDailyLimit: number;
   webSearchContextSize: "low" | "medium" | "high";
   webSearchPrompt: LocalizedText;
   webSearchTriggers: LocalizedList;
@@ -113,7 +111,7 @@ type UsageSummary = {
   byDay: Array<{ date: string; count: number }>;
 };
 
-type SaveKey = "limits" | "section" | "prompt" | "triggers";
+type SaveKey = "controls" | "section" | "prompt" | "triggers";
 
 /* ------------------------------------------------------------------ *
  * Shared styling, matching system-settings-section.tsx
@@ -175,8 +173,6 @@ export function WebSearchSection({ token, notify }: SectionProps) {
 
   // Settings-backed state
   const [enabled, setEnabled] = useState(true);
-  const [freeLimit, setFreeLimit] = useState(2);
-  const [premiumLimit, setPremiumLimit] = useState(20);
   const [contextSize, setContextSize] =
     useState<WebSearchSettings["webSearchContextSize"]>("low");
   const [prompt, setPrompt] = useState<LocalizedText>({ en: "", it: "" });
@@ -224,8 +220,6 @@ export function WebSearchSection({ token, notify }: SectionProps) {
 
   const hydrateSettings = useCallback((data: Partial<WebSearchSettings>) => {
     setEnabled(data.webSearchEnabled !== false);
-    setFreeLimit(Number(data.webSearchFreeDailyLimit ?? 2));
-    setPremiumLimit(Number(data.webSearchPremiumDailyLimit ?? 20));
     setContextSize(data.webSearchContextSize ?? "low");
     setPrompt({
       en: data.webSearchPrompt?.en ?? "",
@@ -324,25 +318,15 @@ export function WebSearchSection({ token, notify }: SectionProps) {
     }
   };
 
-  const saveLimits = (event: FormEvent) => {
+  const saveControls = (event: FormEvent) => {
     event.preventDefault();
-    if (!Number.isInteger(freeLimit) || freeLimit < 0) {
-      notify("error", "Free daily searches must be a whole number of 0 or more.");
-      return;
-    }
-    if (!Number.isInteger(premiumLimit) || premiumLimit < 0) {
-      notify("error", "Premium daily searches must be a whole number of 0 or more.");
-      return;
-    }
     void patchSettings(
-      "limits",
+      "controls",
       {
         webSearchEnabled: enabled,
-        webSearchFreeDailyLimit: freeLimit,
-        webSearchPremiumDailyLimit: premiumLimit,
         webSearchContextSize: contextSize,
       },
-      "Web Search settings saved."
+      "Web Search controls saved."
     );
   };
 
@@ -681,12 +665,12 @@ export function WebSearchSection({ token, notify }: SectionProps) {
         />
       </section>
 
-      {/* 2. Status & limits */}
-      <form onSubmit={saveLimits} className={PANEL_CARD}>
-        <h3 className="text-lg font-bold text-[#201a1b]">Status and limits</h3>
+      {/* 2. Search controls */}
+      <form onSubmit={saveControls} className={PANEL_CARD}>
+        <h3 className="text-lg font-bold text-[#201a1b]">Search controls</h3>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Each search is billed by OpenAI on top of normal tokens, so these caps
-          are the main cost control. Use 0 for unlimited.
+          Control availability and search depth here. Free and Premium quotas
+          are managed together in Usage limits.
         </p>
 
         <div className="mt-4 space-y-4">
@@ -704,21 +688,6 @@ export function WebSearchSection({ token, notify }: SectionProps) {
               className="h-5 w-5 accent-[var(--danger)]"
             />
           </label>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label="Free users: searches per day"
-              type="number"
-              value={freeLimit}
-              onChange={(value) => setFreeLimit(Number(value))}
-            />
-            <Field
-              label="Premium users: searches per day"
-              type="number"
-              value={premiumLimit}
-              onChange={(value) => setPremiumLimit(Number(value))}
-            />
-          </div>
 
           <label className="flex flex-col gap-2">
             <span className="text-sm font-semibold text-[#33292b]">
@@ -740,8 +709,8 @@ export function WebSearchSection({ token, notify }: SectionProps) {
           </label>
         </div>
 
-        <button type="submit" disabled={savingKey === "limits"} className={classNames(PRIMARY_BUTTON, "mt-5")}>
-          {savingKey === "limits" ? "Saving..." : "Save settings"}
+        <button type="submit" disabled={savingKey === "controls"} className={classNames(PRIMARY_BUTTON, "mt-5")}>
+          {savingKey === "controls" ? "Saving..." : "Save controls"}
         </button>
       </form>
 

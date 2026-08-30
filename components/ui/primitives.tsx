@@ -26,6 +26,7 @@ export function AppIcon({
     | "emergency"
     | "materials"
     | "notifications"
+    | "usage"
     | "websearch";
   className?: string;
 }) {
@@ -183,6 +184,20 @@ export function AppIcon({
         <svg {...sharedProps}>
           <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+        </svg>
+      );
+    case "usage":
+      return (
+        <svg {...sharedProps}>
+          <path d="M4 6h10" />
+          <path d="M18 6h2" />
+          <circle cx="16" cy="6" r="2" />
+          <path d="M4 12h2" />
+          <path d="M10 12h10" />
+          <circle cx="8" cy="12" r="2" />
+          <path d="M4 18h7" />
+          <path d="M15 18h5" />
+          <circle cx="13" cy="18" r="2" />
         </svg>
       );
     case "websearch":
