@@ -40,8 +40,6 @@ type PaywallContent = {
 };
 
 type AppSettings = {
-  freeDailyMessageLimit: number;
-  freeDailyChatLimit: number;
   freePrompt: string;
   premiumPrompt: string;
   accessRules: AccessRules;
@@ -58,7 +56,6 @@ type AppSettings = {
 };
 
 type SaveKey =
-  | "limits"
   | "prompts"
   | "access"
   | "toggles"
@@ -120,10 +117,6 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<SaveKey | null>(null);
 
-  // Free limits
-  const [freeDailyMessageLimit, setFreeDailyMessageLimit] = useState(0);
-  const [freeDailyChatLimit, setFreeDailyChatLimit] = useState(0);
-
   // Tier prompts
   const [freePrompt, setFreePrompt] = useState("");
   const [premiumPrompt, setPremiumPrompt] = useState("");
@@ -148,8 +141,6 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
   const hydrate = useCallback((data: AppSettings) => {
     const accessRules = data.accessRules ?? DEFAULT_ACCESS_RULES;
     setSettings(data);
-    setFreeDailyMessageLimit(Number(data.freeDailyMessageLimit ?? 0));
-    setFreeDailyChatLimit(Number(data.freeDailyChatLimit ?? 0));
     setFreePrompt(data.freePrompt ?? "");
     setPremiumPrompt(data.premiumPrompt ?? "");
     setPremiumChecklistsLocked(Boolean(accessRules.premiumChecklistsLocked));
@@ -206,23 +197,6 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
     } finally {
       setSavingKey(null);
     }
-  };
-
-  const saveLimits = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!Number.isInteger(freeDailyMessageLimit) || freeDailyMessageLimit < 0) {
-      notify("error", "Free daily message limit must be a whole number of 0 or more.");
-      return;
-    }
-    if (!Number.isInteger(freeDailyChatLimit) || freeDailyChatLimit < 0) {
-      notify("error", "Free daily chat limit must be a whole number of 0 or more.");
-      return;
-    }
-    void patchSettings(
-      "limits",
-      { freeDailyMessageLimit, freeDailyChatLimit },
-      "Free limits updated."
-    );
   };
 
   const saveAccessRules = (event: FormEvent<HTMLFormElement>) => {
@@ -388,7 +362,7 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
             Premium permissions
           </h2>
           <p className="mt-1 text-sm text-[#6d6668]">
-            Configure limits, locked content, materials access, and platform toggles
+            Configure locked content, materials access, paywall copy, and platform toggles
           </p>
         </div>
         {settings?.updatedAt ? (
@@ -420,42 +394,11 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
         </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-2">
-          {/* Free limits */}
-          <form onSubmit={saveLimits} className={PANEL_CARD}>
-            <div className="mb-5">
-              <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
-                Free tier
-              </p>
-              <h3 className="mt-2 text-xl font-bold text-[#201a1b]">Daily limits</h3>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Caps applied to free users each day. Use 0 to disallow.
-              </p>
-            </div>
-            <div className="grid gap-5">
-              <Field
-                label="Free daily message limit"
-                type="number"
-                value={freeDailyMessageLimit}
-                onChange={(v) => setFreeDailyMessageLimit(Number(v || 0))}
-                placeholder="0"
-              />
-              <Field
-                label="Free daily chat limit"
-                type="number"
-                value={freeDailyChatLimit}
-                onChange={(v) => setFreeDailyChatLimit(Number(v || 0))}
-                placeholder="0"
-              />
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button type="submit" disabled={savingKey === "limits"} className={PRIMARY_BUTTON}>
-                {savingKey === "limits" ? "Saving..." : "Save limits"}
-              </button>
-            </div>
-          </form>
-
           {/* Toggles */}
-          <form onSubmit={saveToggles} className={PANEL_CARD}>
+          <form
+            onSubmit={saveToggles}
+            className={classNames(PANEL_CARD, "xl:col-span-2")}
+          >
             <div className="mb-5">
               <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-[var(--danger)]">
                 Feature flags
@@ -676,7 +619,7 @@ export function SystemSettingsSection({ token, notify }: SectionProps) {
                   placeholder="0"
                 />
                 <p className="text-xs text-[var(--muted)]">
-                  Maximum tracked materials a free user can create. Use 0 to disallow.
+                  Maximum tracked materials a free user can create. Use 0 for unlimited.
                 </p>
               </div>
             </div>

@@ -39,6 +39,7 @@ import { EmergencyResponsesSection } from "@/components/sections/emergency-respo
 import { MaterialsSection } from "@/components/sections/materials-section";
 import { NotificationsSection } from "@/components/sections/notifications-section";
 import { WebSearchSection } from "@/components/sections/web-search-section";
+import { UsageLimitsSection } from "@/components/sections/usage-limits-section";
 
 type AuthMode = "login" | "forgot" | "otp" | "reset";
 type Section =
@@ -55,6 +56,7 @@ type Section =
   | "emergency"
   | "materials"
   | "notifications"
+  | "usage"
   | "websearch";
 type ToastState = { kind: "success" | "error"; message: string } | null;
 
@@ -240,6 +242,7 @@ const navItems: Array<{ id: Section; label: string; eyebrow: string }> = [
   { id: "tips", label: "Safety tips", eyebrow: "Guides" },
   { id: "prompt", label: "Chat bot prompts", eyebrow: "AI" },
   { id: "websearch", label: "Web Search", eyebrow: "Live info" },
+  { id: "usage", label: "Usage limits", eyebrow: "Free & Premium" },
   { id: "emergency", label: "Smart playbooks", eyebrow: "Emergency AI" },
   { id: "users", label: "Users", eyebrow: "Members" },
   { id: "coupons", label: "Coupons", eyebrow: "Access codes" },
@@ -373,7 +376,9 @@ const getSectionIconName = (section: Section) =>
                         ? "materials"
                         : section === "websearch"
                           ? "websearch"
-                          : "notifications";
+                          : section === "usage"
+                            ? "usage"
+                            : "notifications";
 
 export default function AdminDashboardApp() {
   const [booting, setBooting] = useState(true);
@@ -2088,7 +2093,13 @@ export default function AdminDashboardApp() {
       eyebrow: "Live info",
       title: "Web Search",
       description:
-        "Approved sources, daily limits, the Live Information shortcuts, and the prompt that turns live results into safety guidance.",
+        "Approved sources, Live Information shortcuts, and the prompt that turns live results into safety guidance.",
+    },
+    usage: {
+      eyebrow: "Free & Premium",
+      title: "Usage limits",
+      description:
+        "Manage daily, weekly, and custom-checklist allowances for both membership tiers in one place.",
     },
     categories: {
       eyebrow: "Categories",
@@ -2123,7 +2134,7 @@ export default function AdminDashboardApp() {
     appsettings: {
       eyebrow: "Premium permissions",
       title: "Premium permissions",
-      description: "Define limits, gated content, materials access, and platform toggles.",
+      description: "Manage gated content, materials access, paywall copy, and platform toggles.",
     },
     ads: {
       eyebrow: "Monetization",
@@ -2171,6 +2182,8 @@ export default function AdminDashboardApp() {
         return <AdsSection token={token} notify={notify} />;
       case "websearch":
         return <WebSearchSection token={token} notify={notify} />;
+      case "usage":
+        return <UsageLimitsSection token={token} notify={notify} />;
       case "emergency":
         return <EmergencyResponsesSection token={token} notify={notify} />;
       case "materials":
